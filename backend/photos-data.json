@@ -1,0 +1,86 @@
+[
+  {
+    "id": "1",
+    "url": "https://images.unsplash.com/photo-1519389950473-47ba02257781?w=400&h=300&fit=crop",
+    "title": "Team Collaboration Session",
+    "description": "Great brainstorming session with the team during our community meetup",
+    "likes": 12,
+    "comments": [
+      {
+        "id": "1",
+        "user": "Sarah",
+        "text": "Love this energy! 🔥",
+        "timestamp": "2024-01-15T10:30:00.000Z"
+      }
+    ],
+    "likedByUser": false,
+    "uploadedAt": "2024-01-15T10:00:00.000Z"
+  },
+  {
+    "id": "2",
+    "url": "https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=400&h=300&fit=crop",
+    "title": "Presentation Setup",
+    "description": "Setting up for the main presentation - everyone was so excited!",
+    "likes": 8,
+    "comments": [],
+    "likedByUser": true,
+    "uploadedAt": "2024-01-15T11:00:00.000Z"
+  },
+  {
+    "id": "3",
+    "url": "https://images.unsplash.com/photo-1488590528505-98d2b5baba04b?w=400&h=300&fit=crop",
+    "title": "Development Work",
+    "description": "Working on the latest features together - such a productive session",
+    "likes": 15,
+    "comments": [
+      {
+        "id": "1",
+        "user": "Mike",
+        "text": "The code looks great!",
+        "timestamp": "2024-01-15T11:00:00.000Z"
+      },
+      {
+        "id": "2",
+        "user": "Alex",
+        "text": "Ready for deployment?",
+        "timestamp": "2024-01-15T11:15:00.000Z"
+      }
+    ],
+    "likedByUser": false,
+    "uploadedAt": "2024-01-15T12:00:00.000Z"
+  },
+  {
+    "id": "4",
+    "url": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&h=300&fit=crop",
+    "title": "Group Photo",
+    "description": "The whole team together - what an amazing community we've built!",
+    "likes": 23,
+    "comments": [
+      {
+        "id": "1",
+        "user": "Emma",
+        "text": "Best team ever! 💪",
+        "timestamp": "2024-01-15T13:00:00.000Z"
+      }
+    ],
+    "likedByUser": false,
+    "uploadedAt": "2024-01-15T13:00:00.000Z"
+  },
+  {
+    "id": "1753600595316",
+    "url": "/uploads/1753600595241-965261460.png",
+    "title": "Caneta e Galdino",
+    "description": "",
+    "likes": 7,
+    "comments": [
+      {
+        "id": "1753600723457",
+        "user": "Anonymous",
+        "text": "hey",
+        "timestamp": "2025-07-27T07:18:43.457Z"
+      }
+    ],
+    "likedByUser": false,
+    "uploadedAt": "2025-07-27T07:16:35.316Z"
+  }
+]

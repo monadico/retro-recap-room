@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Heart, MessageCircle, Send } from 'lucide-react';
+import { Heart, MessageCircle, Send, Upload, Plus } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Comment {
   id: string;
   user: string;
   text: string;
-  timestamp: Date;
+  timestamp: string;
 }
 
 interface Photo {
@@ -19,107 +20,201 @@ interface Photo {
   likes: number;
   comments: Comment[];
   likedByUser: boolean;
+  uploadedAt: string;
 }
 
-const Gallery: React.FC = () => {
-  const [photos, setPhotos] = useState<Photo[]>([
-    {
-      id: '1',
-      url: 'https://images.unsplash.com/photo-1519389950473-47ba02257781',
-      title: 'Team Collaboration Session',
-      description: 'Great brainstorming session with the team',
-      likes: 12,
-      comments: [
-        {
-          id: '1',
-          user: 'Sarah',
-          text: 'Love this energy! 🔥',
-          timestamp: new Date('2024-01-15T10:30:00')
-        }
-      ],
-      likedByUser: false
-    },
-    {
-      id: '2',
-      url: 'https://images.unsplash.com/photo-1605810230434-7631ac76ec81',
-      title: 'Presentation Setup',
-      description: 'Setting up for the main presentation',
-      likes: 8,
-      comments: [],
-      likedByUser: true
-    },
-    {
-      id: '3',
-      url: 'https://images.unsplash.com/photo-1488590528505-98d2b5baba04b',
-      title: 'Development Work',
-      description: 'Working on the latest features',
-      likes: 15,
-      comments: [
-        {
-          id: '1',
-          user: 'Mike',
-          text: 'The code looks great!',
-          timestamp: new Date('2024-01-15T11:00:00')
-        },
-        {
-          id: '2',
-          user: 'Alex',
-          text: 'Ready for deployment?',
-          timestamp: new Date('2024-01-15T11:15:00')
-        }
-      ],
-      likedByUser: false
-    }
-  ]);
+// API base URL - change this to your VPS URL when deploying
+const API_BASE_URL = 'http://localhost:3001/api';
+const BACKEND_BASE_URL = 'http://localhost:3001';
 
+// API functions
+const fetchPhotos = async (): Promise<Photo[]> => {
+  const response = await fetch(`${API_BASE_URL}/photos`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch photos');
+  }
+  return response.json();
+};
+
+const likePhoto = async (photoId: string): Promise<Photo> => {
+  const response = await fetch(`${API_BASE_URL}/photos/${photoId}/like`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to like photo');
+  }
+  return response.json();
+};
+
+const addComment = async ({ photoId, user, text }: { photoId: string; user: string; text: string }): Promise<Comment> => {
+  const response = await fetch(`${API_BASE_URL}/photos/${photoId}/comments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user, text }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to add comment');
+  }
+  return response.json();
+};
+
+const Gallery: React.FC = () => {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
   const [username, setUsername] = useState('Anonymous');
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const queryClient = useQueryClient();
+
+  // Fetch photos
+  const { data: photos = [], isLoading, error } = useQuery({
+    queryKey: ['photos'],
+    queryFn: fetchPhotos,
+  });
+
+  // Like photo mutation
+  const likeMutation = useMutation({
+    mutationFn: likePhoto,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
+    },
+  });
+
+  // Add comment mutation
+  const commentMutation = useMutation({
+    mutationFn: addComment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
+      setNewComment('');
+    },
+  });
 
   const handleLike = (photoId: string) => {
-    setPhotos(prev => prev.map(photo => {
-      if (photo.id === photoId) {
-        return {
-          ...photo,
-          likes: photo.likedByUser ? photo.likes - 1 : photo.likes + 1,
-          likedByUser: !photo.likedByUser
-        };
-      }
-      return photo;
-    }));
+    likeMutation.mutate(photoId);
   };
 
   const handleComment = (photoId: string) => {
-    if (newComment.trim()) {
-      const comment: Comment = {
-        id: Date.now().toString(),
-        user: username,
+    if (newComment.trim() && username.trim()) {
+      commentMutation.mutate({
+        photoId,
+        user: username.trim(),
         text: newComment.trim(),
-        timestamp: new Date()
-      };
-      
-      setPhotos(prev => prev.map(photo => {
-        if (photo.id === photoId) {
-          return {
-            ...photo,
-            comments: [...photo.comments, comment]
-          };
-        }
-        return photo;
-      }));
-      setNewComment('');
+      });
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !uploadTitle.trim()) return;
+
+    const formData = new FormData();
+    formData.append('image', selectedFile);
+    formData.append('title', uploadTitle);
+    formData.append('description', uploadDescription);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/photos`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        queryClient.invalidateQueries({ queryKey: ['photos'] });
+        setShowUploadForm(false);
+        setSelectedFile(null);
+        setUploadTitle('');
+        setUploadDescription('');
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
     }
   };
 
   const selectedPhotoData = photos.find(p => p.id === selectedPhoto);
 
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">📸</div>
+          <p>Loading photos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">❌</div>
+          <p>Failed to load photos. Please check your connection.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex bg-[hsl(var(--background))]">
       {/* Photo Grid */}
       <div className="w-1/2 border-r-2" style={{ borderStyle: 'inset' }}>
-        <div className="retro-window-header p-2 border-b-2" style={{ borderStyle: 'inset' }}>
+        <div className="retro-window-header p-2 border-b-2 flex justify-between items-center" style={{ borderStyle: 'inset' }}>
           <h3 className="font-bold text-sm text-[hsl(var(--foreground))]">📸 Photo Gallery</h3>
+          <Button
+            onClick={() => setShowUploadForm(!showUploadForm)}
+            className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+          >
+            <Plus size={12} className="mr-1" />
+            Upload
+          </Button>
         </div>
+
+        {/* Upload Form */}
+        {showUploadForm && (
+          <div className="retro-panel p-3 border-b-2 bg-[hsl(var(--card))]" style={{ borderStyle: 'inset' }}>
+            <div className="space-y-2">
+              <Input
+                value={uploadTitle}
+                onChange={(e) => setUploadTitle(e.target.value)}
+                placeholder="Photo title..."
+                className="retro-input text-xs"
+              />
+              <Input
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+                placeholder="Photo description..."
+                className="retro-input text-xs"
+              />
+              <div className="flex items-center space-x-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="retro-input text-xs"
+                />
+                <Button
+                  onClick={handleUpload}
+                  disabled={!selectedFile || !uploadTitle.trim()}
+                  className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+                >
+                  <Upload size={12} />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <ScrollArea className="h-full p-4">
           <div className="grid grid-cols-2 gap-3">
             {photos.map((photo) => (
@@ -131,7 +226,7 @@ const Gallery: React.FC = () => {
                 onClick={() => setSelectedPhoto(photo.id)}
               >
                 <img
-                  src={photo.url}
+                  src={photo.url.startsWith('http') ? photo.url : `${BACKEND_BASE_URL}${photo.url}`}
                   alt={photo.title}
                   className="w-full h-20 object-cover border-2"
                   style={{ borderStyle: 'inset' }}
@@ -168,7 +263,7 @@ const Gallery: React.FC = () => {
             
             <div className="p-3">
               <img
-                src={selectedPhotoData.url}
+                src={selectedPhotoData.url.startsWith('http') ? selectedPhotoData.url : `${BACKEND_BASE_URL}${selectedPhotoData.url}`}
                 alt={selectedPhotoData.title}
                 className="w-full h-32 object-cover border-2 mb-2"
                 style={{ borderStyle: 'inset' }}
@@ -181,11 +276,8 @@ const Gallery: React.FC = () => {
               <div className="flex items-center space-x-2 mb-3">
                 <Button
                   onClick={() => handleLike(selectedPhotoData.id)}
-                  className={`retro-button px-2 py-1 text-xs h-auto ${
-                    selectedPhotoData.likedByUser 
-                      ? 'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]' 
-                      : 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]'
-                  }`}
+                  disabled={likeMutation.isPending}
+                  className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"
                 >
                   <Heart size={12} className="mr-1" />
                   {selectedPhotoData.likes}
@@ -211,7 +303,7 @@ const Gallery: React.FC = () => {
                           {comment.text}
                         </p>
                         <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {comment.timestamp.toLocaleTimeString([], { 
+                          {new Date(comment.timestamp).toLocaleTimeString([], { 
                             hour: '2-digit', 
                             minute: '2-digit' 
                           })}
@@ -240,9 +332,11 @@ const Gallery: React.FC = () => {
                   onKeyPress={(e) => e.key === 'Enter' && handleComment(selectedPhotoData.id)}
                   placeholder="Add a comment..."
                   className="flex-1 retro-input text-xs"
+                  disabled={commentMutation.isPending}
                 />
                 <Button
                   onClick={() => handleComment(selectedPhotoData.id)}
+                  disabled={commentMutation.isPending || !newComment.trim()}
                   className="retro-button px-2 py-1 h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
                 >
                   <Send size={12} />
