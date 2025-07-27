@@ -387,10 +387,107 @@ app.post('/api/xposts/extract', async (req, res) => {
       return res.status(400).json({ error: 'Invalid X post URL format' });
     }
 
-    // Fetch the X post page to extract meta tags
+    // Try multiple approaches to get post data
+    
+    // 1. Try X's oEmbed API first
+    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true&hide_thread=true`;
+    
+    try {
+      const oembedResponse = await fetch(oembedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+      
+      if (oembedResponse.ok) {
+        const oembedData = await oembedResponse.json();
+        console.log('oEmbed data:', oembedData);
+        
+        if (oembedData.html) {
+          // Extract data from oEmbed response
+          const htmlContent = oembedData.html;
+          
+          // Extract text content from HTML (remove HTML tags)
+          const textContent = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+          
+          // Extract image from oEmbed HTML
+          const imgMatch = htmlContent.match(/<img[^>]+src=["']([^"']+)["']/);
+          const image = imgMatch ? imgMatch[1] : undefined;
+          
+          // Extract author info
+          const authorName = oembedData.author_name || username;
+          const authorUrl = oembedData.author_url || '';
+          const authorHandle = authorUrl ? `@${authorUrl.split('/').pop()}` : `@${username}`;
+          
+          return res.json({
+            success: true,
+            data: {
+              author: {
+                name: authorName,
+                handle: authorHandle,
+                avatar: `https://images.unsplash.com/photo-${Math.random().toString(36).substring(2, 15)}?w=50&h=50&fit=crop`,
+                verified: Math.random() > 0.5
+              },
+              content: textContent || oembedData.author_name || 'Check out this post on X!',
+              image: image,
+              url: url
+            }
+          });
+        }
+      }
+    } catch (oembedError) {
+      console.log('oEmbed API failed:', oembedError.message);
+    }
+    
+    // 2. Try using a different oEmbed endpoint
+    const altOembedUrl = `https://api.twitter.com/1.1/statuses/oembed.json?url=${encodeURIComponent(url)}&omit_script=true&hide_thread=true`;
+    
+    try {
+      const altResponse = await fetch(altOembedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+      
+      if (altResponse.ok) {
+        const altData = await altResponse.json();
+        console.log('Alt oEmbed data:', altData);
+        
+        if (altData.html) {
+          const htmlContent = altData.html;
+          const textContent = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+          const imgMatch = htmlContent.match(/<img[^>]+src=["']([^"']+)["']/);
+          const image = imgMatch ? imgMatch[1] : undefined;
+          
+          return res.json({
+            success: true,
+            data: {
+              author: {
+                name: altData.author_name || username,
+                handle: `@${username}`,
+                avatar: `https://images.unsplash.com/photo-${Math.random().toString(36).substring(2, 15)}?w=50&h=50&fit=crop`,
+                verified: Math.random() > 0.5
+              },
+              content: textContent || 'Check out this post on X!',
+              image: image,
+              url: url
+            }
+          });
+        }
+      }
+    } catch (altError) {
+      console.log('Alt oEmbed API failed:', altError.message);
+    }
+
+    // Fallback: Fetch the X post page to extract meta tags
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
       }
     });
 
@@ -399,17 +496,21 @@ app.post('/api/xposts/extract', async (req, res) => {
     }
 
     const html = await response.text();
+    console.log('HTML length:', html.length);
+    console.log('HTML preview:', html.substring(0, 1000));
     
     // Extract meta tags using regex
     const extractMetaTag = (name) => {
       const regex = new RegExp(`<meta\\s+name=["']${name}["']\\s+content=["']([^"']+)["']`, 'i');
       const match = html.match(regex);
+      console.log(`Looking for ${name}:`, match ? match[1] : 'not found');
       return match ? match[1] : null;
     };
 
     const extractPropertyTag = (property) => {
       const regex = new RegExp(`<meta\\s+property=["']${property}["']\\s+content=["']([^"']+)["']`, 'i');
       const match = html.match(regex);
+      console.log(`Looking for ${property}:`, match ? match[1] : 'not found');
       return match ? match[1] : null;
     };
 
