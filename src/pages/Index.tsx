@@ -4,6 +4,7 @@ import PoolTV from '../components/PoolTV';
 import Guestbook from '../components/Guestbook';
 import Chat from '../components/Chat';
 import Gallery from '../components/Gallery';
+import XFeed from '../components/XFeed';
 import DesktopDock from '../components/DesktopDock';
 import retroDesktopBg from '../assets/retro-desktop-bg.jpg';
 
@@ -70,14 +71,7 @@ const Index = () => {
           </div>
         );
       case 'x-feed':
-        return (
-          <div className="h-full flex items-center justify-center text-[hsl(var(--muted-foreground))]">
-            <div className="text-center">
-              <div className="text-4xl mb-4">🐦</div>
-              <p>Social Media Feed Coming Soon!</p>
-            </div>
-          </div>
-        );
+        return <XFeed />;
       default:
         return (
           <div className="h-full flex items-center justify-center text-[hsl(var(--muted-foreground))]">

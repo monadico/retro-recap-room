@@ -1,0 +1,64 @@
+[
+  {
+    "id": "1",
+    "author": {
+      "name": "Community Event",
+      "handle": "@community_event",
+      "avatar": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=50&h=50&fit=crop",
+      "verified": true
+    },
+    "content": "Amazing turnout at our latest meetup! 🎉 The energy was incredible and the discussions were mind-blowing. Can't wait for the next one! #Community #Innovation",
+    "image": "https://images.unsplash.com/photo-1519389950473-47ba02257781?w=400&h=300&fit=crop",
+    "timestamp": "2024-01-15T10:30:00.000Z",
+    "engagement": {
+      "likes": 127,
+      "comments": 23,
+      "reposts": 15,
+      "views": 2047
+    },
+    "url": "https://x.com/community_event/status/123456789",
+    "liked": false,
+    "reposted": false
+  },
+  {
+    "id": "2",
+    "author": {
+      "name": "Tech Speaker",
+      "handle": "@tech_speaker",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&h=50&fit=crop",
+      "verified": false
+    },
+    "content": "Just wrapped up an incredible session on the future of web development. The questions from the audience were fantastic! Thanks everyone for the great discussion.",
+    "timestamp": "2024-01-15T09:15:00.000Z",
+    "engagement": {
+      "likes": 89,
+      "comments": 12,
+      "reposts": 8,
+      "views": 1234
+    },
+    "url": "https://x.com/tech_speaker/status/123456788",
+    "liked": true,
+    "reposted": false
+  },
+  {
+    "id": "3",
+    "author": {
+      "name": "Event Organizer",
+      "handle": "@event_org",
+      "avatar": "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=50&h=50&fit=crop",
+      "verified": true
+    },
+    "content": "Behind the scenes: Setting up for tomorrow's big event! The venue is looking perfect and we're so excited to see everyone. Don't forget to bring your energy! ⚡",
+    "image": "https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=400&h=300&fit=crop",
+    "timestamp": "2024-01-14T16:45:00.000Z",
+    "engagement": {
+      "likes": 234,
+      "comments": 45,
+      "reposts": 32,
+      "views": 3456
+    },
+    "url": "https://x.com/event_org/status/123456787",
+    "liked": false,
+    "reposted": true
+  }
+] 
