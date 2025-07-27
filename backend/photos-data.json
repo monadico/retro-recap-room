@@ -11,6 +11,30 @@
         "user": "Sarah",
         "text": "Love this energy! 🔥",
         "timestamp": "2024-01-15T10:30:00.000Z"
+      },
+      {
+        "id": "2",
+        "user": "Mike",
+        "text": "This was such an amazing session!",
+        "timestamp": "2024-01-15T10:35:00.000Z"
+      },
+      {
+        "id": "3",
+        "user": "Emma",
+        "text": "Can't wait for the next one!",
+        "timestamp": "2024-01-15T10:40:00.000Z"
+      },
+      {
+        "id": "4",
+        "user": "Alex",
+        "text": "Great collaboration everyone!",
+        "timestamp": "2024-01-15T10:45:00.000Z"
+      },
+      {
+        "id": "5",
+        "user": "John",
+        "text": "This photo captures the moment perfectly!",
+        "timestamp": "2024-01-15T10:50:00.000Z"
       }
     ],
     "likedByUser": false,
@@ -71,7 +95,7 @@
     "url": "/uploads/1753600595241-965261460.png",
     "title": "Caneta e Galdino",
     "description": "",
-    "likes": 7,
+    "likes": 10,
     "comments": [
       {
         "id": "1753600723457",

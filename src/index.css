@@ -301,4 +301,45 @@ All colors MUST be HSL for proper theming.
   .retro-window.resizing .react-resizable-handle {
     background-color: rgba(255, 255, 255, 0.2);
   }
+
+  /* Custom scrollbar for retro aesthetic */
+  .retro-scrollbar {
+    scrollbar-width: auto;
+    scrollbar-color: hsl(var(--muted)) hsl(var(--background));
+  }
+
+  .retro-scrollbar::-webkit-scrollbar {
+    width: 16px;
+    height: 16px;
+  }
+
+  .retro-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+    border: 2px solid hsl(var(--border));
+    border-style: inset;
+  }
+
+  .retro-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border: 2px solid hsl(var(--border));
+    border-style: outset;
+    border-radius: 4px;
+    min-height: 20px;
+  }
+
+  .retro-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  .retro-scrollbar::-webkit-scrollbar-corner {
+    background: hsl(var(--background));
+    border: 2px solid hsl(var(--border));
+    border-style: inset;
+  }
+
+  /* Force scrollbar to always show */
+  .retro-scrollbar {
+    overflow-y: scroll !important;
+    overflow-x: auto !important;
+  }
 }

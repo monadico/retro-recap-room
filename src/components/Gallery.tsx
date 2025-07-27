@@ -261,61 +261,72 @@ const Gallery: React.FC = () => {
               </h3>
             </div>
             
-            <div className="p-3">
-              <img
-                src={selectedPhotoData.url.startsWith('http') ? selectedPhotoData.url : `${BACKEND_BASE_URL}${selectedPhotoData.url}`}
-                alt={selectedPhotoData.title}
-                className="w-full h-32 object-cover border-2 mb-2"
-                style={{ borderStyle: 'inset' }}
-              />
-              <p className="text-xs text-[hsl(var(--foreground))] mb-3">
-                {selectedPhotoData.description}
-              </p>
+            {/* Scrollable content area */}
+            <div className="flex-1 overflow-auto retro-scrollbar">
+              <div className="p-3 space-y-4">
+                {/* Full-size image display */}
+                <div className="flex items-center justify-center">
+                  <img
+                    src={selectedPhotoData.url.startsWith('http') ? selectedPhotoData.url : `${BACKEND_BASE_URL}${selectedPhotoData.url}`}
+                    alt={selectedPhotoData.title}
+                    className="max-w-full border-2 object-contain"
+                    style={{ borderStyle: 'inset' }}
+                  />
+                </div>
+                
+                {/* Photo description */}
+                <div className="retro-panel p-3 bg-[hsl(var(--card))]">
+                  <p className="text-xs text-[hsl(var(--foreground))]">
+                    {selectedPhotoData.description}
+                  </p>
+                </div>
               
-              {/* Like and Comment Actions */}
-              <div className="flex items-center space-x-2 mb-3">
-                <Button
-                  onClick={() => handleLike(selectedPhotoData.id)}
-                  disabled={likeMutation.isPending}
-                  className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"
-                >
-                  <Heart size={12} className="mr-1" />
-                  {selectedPhotoData.likes}
-                </Button>
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                  <MessageCircle size={12} className="inline mr-1" />
-                  {selectedPhotoData.comments.length} comments
-                </span>
+                {/* Like and Comment Actions */}
+                <div className="flex items-center space-x-2">
+                  <Button
+                    onClick={() => handleLike(selectedPhotoData.id)}
+                    disabled={likeMutation.isPending}
+                    className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"
+                  >
+                    <Heart size={12} className="mr-1" />
+                    {selectedPhotoData.likes}
+                  </Button>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                    <MessageCircle size={12} className="inline mr-1" />
+                    {selectedPhotoData.comments.length} comments
+                  </span>
+                </div>
+
+                {/* Comments Section */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-[hsl(var(--foreground))] border-b-2 pb-1" style={{ borderStyle: 'inset' }}>
+                    Comments
+                  </h4>
+                  {selectedPhotoData.comments.map((comment) => (
+                    <div key={comment.id} className="retro-panel p-2 bg-[hsl(var(--card))]">
+                      <div className="flex items-start space-x-2">
+                        <div className="text-xs font-bold text-[hsl(var(--primary))]">
+                          {comment.user}:
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-[hsl(var(--foreground))]">
+                            {comment.text}
+                          </p>
+                          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                            {new Date(comment.timestamp).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Comments Section */}
-            <ScrollArea className="flex-1 px-3">
-              <div className="space-y-2">
-                {selectedPhotoData.comments.map((comment) => (
-                  <div key={comment.id} className="retro-panel p-2 bg-[hsl(var(--card))]">
-                    <div className="flex items-start space-x-2">
-                      <div className="text-xs font-bold text-[hsl(var(--primary))]">
-                        {comment.user}:
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-[hsl(var(--foreground))]">
-                          {comment.text}
-                        </p>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {new Date(comment.timestamp).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-
-            {/* Comment Input */}
+            {/* Comment Input - Fixed at bottom */}
             <div className="retro-window-header p-2 border-t-2" style={{ borderStyle: 'inset' }}>
               <div className="flex items-center space-x-2 mb-2">
                 <Input
