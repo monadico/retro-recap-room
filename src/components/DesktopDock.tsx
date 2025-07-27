@@ -7,7 +7,8 @@ import {
   Twitter,
   Monitor,
   Calendar,
-  Settings
+  Settings,
+  Users
 } from 'lucide-react';
 
 interface DockItem {
@@ -36,16 +37,22 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       onClick: () => onOpenWindow('guestbook')
     },
     {
-      id: 'mixtapes',
-      label: 'Mixtapes',
-      icon: <Music size={24} />,
-      onClick: () => onOpenWindow('mixtapes')
+      id: 'chat',
+      label: 'Chat',
+      icon: <Users size={24} />,
+      onClick: () => onOpenWindow('chat')
     },
     {
       id: 'gallery',
       label: 'The Gallery',
       icon: <Image size={24} />,
       onClick: () => onOpenWindow('gallery')
+    },
+    {
+      id: 'mixtapes',
+      label: 'Mixtapes',
+      icon: <Music size={24} />,
+      onClick: () => onOpenWindow('mixtapes')
     },
     {
       id: 'x-feed',
