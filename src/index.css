@@ -177,4 +177,128 @@ All colors MUST be HSL for proper theming.
     image-rendering: pixelated;
     border-image: url("data:image/svg+xml,%3csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m0,0h100v100H0V0' fill='none' stroke='%23666' stroke-width='2'/%3e%3c/svg%3e") 2;
   }
+
+  /* Resize Handle Styles */
+  .react-resizable {
+    position: relative;
+  }
+
+  .react-resizable-handle {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    box-sizing: border-box;
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEwIDEwTDEwIDIwTTEwIDEwTDIwIDEwIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4K');
+    background-position: bottom right;
+    padding: 0 3px 3px 0;
+    cursor: se-resize !important;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: auto !important;
+  }
+
+  /* Show handles on window hover */
+  .retro-window:hover .react-resizable-handle {
+    opacity: 1;
+  }
+
+  .react-resizable-handle-se {
+    bottom: 0;
+    right: 0;
+    cursor: se-resize !important;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 0 0 4px 0;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+    width: 25px !important;
+    height: 25px !important;
+    z-index: 10000 !important;
+  }
+
+  .retro-window:hover .react-resizable-handle-se {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(0, 0, 0, 0.6);
+    cursor: se-resize !important;
+  }
+
+  .react-resizable-handle-se:hover {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(0, 0, 0, 0.8) !important;
+    cursor: se-resize !important;
+  }
+
+  .react-resizable-handle-sw {
+    bottom: 0;
+    left: 0;
+    cursor: sw-resize;
+    transform: rotate(90deg);
+  }
+
+  .react-resizable-handle-ne {
+    top: 0;
+    right: 0;
+    cursor: ne-resize;
+    transform: rotate(-90deg);
+  }
+
+  .react-resizable-handle-nw {
+    top: 0;
+    left: 0;
+    cursor: nw-resize;
+    transform: rotate(180deg);
+  }
+
+  .react-resizable-handle-s {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: s-resize;
+    width: 20px;
+    height: 10px;
+  }
+
+  .react-resizable-handle-n {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: n-resize;
+    width: 20px;
+    height: 10px;
+  }
+
+  .react-resizable-handle-e {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: e-resize;
+    width: 10px;
+    height: 20px;
+  }
+
+  .react-resizable-handle-w {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: w-resize;
+    width: 10px;
+    height: 20px;
+  }
+
+  /* Hover effects for resize handles */
+  .react-resizable-handle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  /* Resizing state */
+  .retro-window.resizing {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    border-color: hsl(var(--primary));
+  }
+
+  .retro-window.resizing .react-resizable-handle {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
 }

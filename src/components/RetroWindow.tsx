@@ -27,6 +27,7 @@ const RetroWindow: React.FC<RetroWindowProps> = ({
   const [position, setPosition] = useState(defaultPosition);
   const [size, setSize] = useState(defaultSize);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [previousState, setPreviousState] = useState({ position: defaultPosition, size: defaultSize });
   const dragRef = useRef<HTMLDivElement>(null);
 
@@ -71,13 +72,9 @@ const RetroWindow: React.FC<RetroWindowProps> = ({
           })
         }}
       >
-        <ResizableBox
-          width={size.width}
-          height={size.height}
-          onResize={(e, { size: newSize }) => setSize(newSize)}
-          resizeHandles={['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']}
-          className="retro-window"
-          minConstraints={[200, 150]}
+        <div
+          className={`retro-window ${isResizing ? 'resizing' : ''}`}
+          style={{ width: size.width, height: size.height }}
         >
           <div className="h-full flex flex-col">
             {/* Window Header */}
@@ -121,11 +118,41 @@ const RetroWindow: React.FC<RetroWindowProps> = ({
             </div>
 
             {/* Window Content */}
-            <div className="flex-1 overflow-hidden bg-[hsl(var(--card))] p-2">
+            <div className="flex-1 overflow-hidden bg-[hsl(var(--card))] p-2 relative">
               {children}
+              {/* Custom resize handle */}
+              <div 
+                className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 cursor-se-resize flex items-center justify-center text-white text-xs font-bold"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizing(true);
+                  
+                  const startX = e.clientX;
+                  const startY = e.clientY;
+                  const startWidth = size.width;
+                  const startHeight = size.height;
+                  
+                  const handleMouseMove = (e: MouseEvent) => {
+                    const newWidth = Math.max(300, startWidth + (e.clientX - startX));
+                    const newHeight = Math.max(200, startHeight + (e.clientY - startY));
+                    setSize({ width: newWidth, height: newHeight });
+                  };
+                  
+                  const handleMouseUp = () => {
+                    setIsResizing(false);
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                  };
+                  
+                  document.addEventListener('mousemove', handleMouseMove);
+                  document.addEventListener('mouseup', handleMouseUp);
+                }}
+              >
+                ↙
+              </div>
             </div>
           </div>
-        </ResizableBox>
+        </div>
       </div>
     </Draggable>
   );
