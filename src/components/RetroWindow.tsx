@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Draggable from 'react-draggable';
 import { ResizableBox } from 'react-resizable';
-import { X, Minus, Square } from 'lucide-react';
+import { X, Minus, Square, Maximize2, MoreHorizontal } from 'lucide-react';
 
 interface RetroWindowProps {
   title: string;
@@ -26,7 +26,24 @@ const RetroWindow: React.FC<RetroWindowProps> = ({
 }) => {
   const [position, setPosition] = useState(defaultPosition);
   const [size, setSize] = useState(defaultSize);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [previousState, setPreviousState] = useState({ position: defaultPosition, size: defaultSize });
   const dragRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = () => {
+    if (isFullscreen) {
+      // Restore to previous state
+      setPosition(previousState.position);
+      setSize(previousState.size);
+      setIsFullscreen(false);
+    } else {
+      // Save current state and go fullscreen
+      setPreviousState({ position, size });
+      setPosition({ x: 0, y: 0 });
+      setSize({ width: window.innerWidth, height: window.innerHeight - 60 }); // Account for dock
+      setIsFullscreen(true);
+    }
+  };
 
   if (isMinimized) {
     return null;
@@ -36,20 +53,31 @@ const RetroWindow: React.FC<RetroWindowProps> = ({
     <Draggable
       handle=".window-header"
       position={position}
-      onDrag={(e, data) => setPosition({ x: data.x, y: data.y })}
+      onDrag={(e, data) => !isFullscreen && setPosition({ x: data.x, y: data.y })}
       nodeRef={dragRef}
+      disabled={isFullscreen}
     >
       <div
         ref={dragRef}
-        className={`absolute z-10 select-none ${className}`}
-        style={{ left: 0, top: 0 }}
+        className={`absolute select-none ${isFullscreen ? 'z-50' : 'z-10'} ${className}`}
+        style={{ 
+          left: 0, 
+          top: 0,
+          ...(isFullscreen && { 
+            position: 'fixed',
+            width: '100vw',
+            height: 'calc(100vh - 60px)',
+            zIndex: 9999
+          })
+        }}
       >
         <ResizableBox
           width={size.width}
           height={size.height}
           onResize={(e, { size: newSize }) => setSize(newSize)}
-          resizeHandles={['se']}
+          resizeHandles={['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']}
           className="retro-window"
+          minConstraints={[200, 150]}
         >
           <div className="h-full flex flex-col">
             {/* Window Header */}
@@ -64,23 +92,27 @@ const RetroWindow: React.FC<RetroWindowProps> = ({
                 {onMinimize && (
                   <button
                     onClick={onMinimize}
-                    className="retro-button p-1 text-xs"
+                    className="retro-button p-1 text-xs hover:bg-[hsl(var(--accent))]"
                     style={{ minWidth: '20px', height: '20px' }}
+                    title="Minimize"
                   >
                     <Minus size={12} />
                   </button>
                 )}
                 <button
-                  className="retro-button p-1 text-xs"
+                  onClick={toggleFullscreen}
+                  className="retro-button p-1 text-xs hover:bg-[hsl(var(--accent))]"
                   style={{ minWidth: '20px', height: '20px' }}
+                  title={isFullscreen ? "Restore" : "Maximize"}
                 >
-                  <Square size={12} />
+                  {isFullscreen ? <MoreHorizontal size={12} /> : <Maximize2 size={12} />}
                 </button>
                 {onClose && (
                   <button
                     onClick={onClose}
                     className="retro-button p-1 text-xs bg-red-300 hover:bg-red-400"
                     style={{ minWidth: '20px', height: '20px' }}
+                    title="Close"
                   >
                     <X size={12} />
                   </button>
