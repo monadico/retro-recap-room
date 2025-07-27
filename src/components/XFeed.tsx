@@ -1,94 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ExternalLink, Plus, Trash2 } from 'lucide-react';
 
+// TypeScript declarations for Twitter widget API
+declare global {
+  interface Window {
+    twttr?: {
+      widgets: {
+        load: () => void;
+      };
+    };
+  }
+}
+
 interface XPost {
   id: string;
-  author: {
-    name: string;
-    handle: string;
-    avatar: string;
-    verified: boolean;
-  };
-  content: string;
-  image?: string;
-  timestamp: string;
-  engagement: {
-    likes: number;
-    comments: number;
-    reposts: number;
-    views: number;
-  };
   url: string;
-  liked: boolean;
-  reposted: boolean;
+  embedHtml: string;
+  authorName?: string;
+  authorUrl?: string;
+  timestamp: string;
 }
 
 const XFeed: React.FC = () => {
   const [posts, setPosts] = useState<XPost[]>([
     {
       id: '1',
-      author: {
-        name: 'Community Event',
-        handle: '@community_event',
-        avatar: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=50&h=50&fit=crop',
-        verified: true
-      },
-      content: 'Amazing turnout at our latest meetup! 🎉 The energy was incredible and the discussions were mind-blowing. Can\'t wait for the next one! #Community #Innovation',
-      image: 'https://images.unsplash.com/photo-1519389950473-47ba02257781?w=400&h=300&fit=crop',
-      timestamp: '2024-01-15T10:30:00.000Z',
-      engagement: {
-        likes: 127,
-        comments: 23,
-        reposts: 15,
-        views: 2047
-      },
       url: 'https://x.com/community_event/status/123456789',
-      liked: false,
-      reposted: false
-    },
-    {
-      id: '2',
-      author: {
-        name: 'Tech Speaker',
-        handle: '@tech_speaker',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&h=50&fit=crop',
-        verified: false
-      },
-      content: 'Just wrapped up an incredible session on the future of web development. The questions from the audience were fantastic! Thanks everyone for the great discussion.',
-      timestamp: '2024-01-15T09:15:00.000Z',
-      engagement: {
-        likes: 89,
-        comments: 12,
-        reposts: 8,
-        views: 1234
-      },
-      url: 'https://x.com/tech_speaker/status/123456788',
-      liked: true,
-      reposted: false
-    },
-    {
-      id: '3',
-      author: {
-        name: 'Event Organizer',
-        handle: '@event_org',
-        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=50&h=50&fit=crop',
-        verified: true
-      },
-      content: 'Behind the scenes: Setting up for tomorrow\'s big event! The venue is looking perfect and we\'re so excited to see everyone. Don\'t forget to bring your energy! ⚡',
-      image: 'https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=400&h=300&fit=crop',
-      timestamp: '2024-01-14T16:45:00.000Z',
-      engagement: {
-        likes: 234,
-        comments: 45,
-        reposts: 32,
-        views: 3456
-      },
-      url: 'https://x.com/event_org/status/123456787',
-      liked: false,
-      reposted: true
+      embedHtml: '<div class="placeholder-post">Sample post - Add real X posts to see embedded content!</div>',
+      authorName: 'Community Event',
+      authorUrl: 'https://x.com/community_event',
+      timestamp: '2024-01-15T10:30:00.000Z'
     }
   ]);
 
@@ -96,32 +40,56 @@ const XFeed: React.FC = () => {
   const [postUrl, setPostUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load X embed script when component mounts
+  useEffect(() => {
+    // Load X embed script if not already loaded
+    if (!window.twttr) {
+      const script = document.createElement('script');
+      script.src = 'https://platform.twitter.com/widgets.js';
+      script.async = true;
+      script.charset = 'utf-8';
+      document.head.appendChild(script);
+    }
+  }, []);
 
+  // Function to process X embeds after they're added
+  const processXEmbeds = () => {
+    if (window.twttr && window.twttr.widgets) {
+      window.twttr.widgets.load();
+    }
+  };
 
-  const extractPostData = async (url: string) => {
+  const fetchXEmbed = async (url: string) => {
     try {
-      const response = await fetch('http://localhost:3001/api/xposts/extract', {
+      // Use our backend as a proxy to avoid CORS issues
+      const response = await fetch('http://localhost:3001/api/xposts/oembed', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ url })
       });
-
+      
       if (!response.ok) {
-        throw new Error('Failed to extract post data');
+        throw new Error('Failed to fetch X embed');
       }
 
       const result = await response.json();
       
       if (!result.success) {
-        throw new Error(result.error || 'Failed to extract post data');
+        throw new Error(result.error || 'Failed to fetch X embed');
       }
 
-      return result.data;
+      return {
+        html: result.data.html,
+        authorName: result.data.authorName,
+        authorUrl: result.data.authorUrl,
+        width: result.data.width,
+        height: result.data.height
+      };
     } catch (error) {
-      console.error('Error extracting post data:', error);
-      throw new Error('Failed to extract post data from URL');
+      console.error('Error fetching X embed:', error);
+      throw new Error('Failed to fetch X post embed');
     }
   };
 
@@ -131,30 +99,27 @@ const XFeed: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const postData = await extractPostData(postUrl);
+      const embedData = await fetchXEmbed(postUrl);
       
       const post: XPost = {
         id: Date.now().toString(),
-        author: postData.author,
-        content: postData.content,
-        image: postData.image,
-        timestamp: new Date().toISOString(),
-        engagement: {
-          likes: 0,
-          comments: 0,
-          reposts: 0,
-          views: 0
-        },
         url: postUrl,
-        liked: false,
-        reposted: false
+        embedHtml: embedData.html,
+        authorName: embedData.authorName,
+        authorUrl: embedData.authorUrl,
+        timestamp: new Date().toISOString()
       };
 
       setPosts(prev => [post, ...prev]);
       setPostUrl('');
       setShowAddForm(false);
+      
+      // Process X embeds after adding the post
+      setTimeout(() => {
+        processXEmbeds();
+      }, 100);
     } catch (error) {
-      alert('Failed to extract post data. Please check the URL and try again.');
+      alert('Failed to fetch X post. Please check the URL and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -174,12 +139,6 @@ const XFeed: React.FC = () => {
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays < 7) return `${diffInDays}d`;
     return date.toLocaleDateString();
-  };
-
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
   };
 
   return (
@@ -213,7 +172,7 @@ const XFeed: React.FC = () => {
               />
             </div>
             <div className="text-xs text-[hsl(var(--muted-foreground))]">
-              Just paste the X post URL and we'll automatically extract the content, author, and images!
+              Paste any X post URL and we'll embed it directly with real images and styling!
             </div>
             <div className="flex space-x-2">
               <Button
@@ -221,7 +180,7 @@ const XFeed: React.FC = () => {
                 disabled={!postUrl.trim() || isLoading}
                 className="retro-button px-3 py-1 text-xs h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
               >
-                {isLoading ? 'Processing...' : 'Add Post'}
+                {isLoading ? 'Fetching...' : 'Add Post'}
               </Button>
               <Button
                 onClick={() => {
@@ -244,23 +203,13 @@ const XFeed: React.FC = () => {
             <div key={post.id} className="retro-panel p-3 bg-[hsl(var(--card))] border-2" style={{ borderStyle: 'inset' }}>
               {/* Post Header */}
               <div className="flex items-start space-x-2 mb-2">
-                <img
-                  src={post.author.avatar}
-                  alt={post.author.name}
-                  className="w-8 h-8 rounded-full border-2"
-                  style={{ borderStyle: 'inset' }}
-                />
                 <div className="flex-1">
                   <div className="flex items-center space-x-1">
-                    <span className="text-xs font-bold text-[hsl(var(--foreground))]">
-                      {post.author.name}
-                    </span>
-                    {post.author.verified && (
-                      <span className="text-blue-500 text-xs">✓</span>
+                    {post.authorName && (
+                      <span className="text-xs font-bold text-[hsl(var(--foreground))]">
+                        {post.authorName}
+                      </span>
                     )}
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {post.author.handle}
-                    </span>
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">
                       · {formatTimestamp(post.timestamp)}
                     </span>
@@ -275,24 +224,13 @@ const XFeed: React.FC = () => {
                 </Button>
               </div>
 
-              {/* Post Content */}
+              {/* Embedded X Post */}
               <div className="mb-3">
-                <p className="text-xs text-[hsl(var(--foreground))] leading-relaxed">
-                  {post.content}
-                </p>
+                <div 
+                  className="x-embed-container"
+                  dangerouslySetInnerHTML={{ __html: post.embedHtml }}
+                />
               </div>
-
-              {/* Post Image */}
-              {post.image && (
-                <div className="mb-3">
-                  <img
-                    src={post.image}
-                    alt="Post content"
-                    className="w-full max-h-48 object-cover border-2 rounded"
-                    style={{ borderStyle: 'inset' }}
-                  />
-                </div>
-              )}
 
               {/* Direct Link */}
               <div className="flex items-center justify-between mt-2">

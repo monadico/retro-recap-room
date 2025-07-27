@@ -342,4 +342,45 @@ All colors MUST be HSL for proper theming.
     overflow-y: scroll !important;
     overflow-x: auto !important;
   }
+
+  /* X Embed Styling */
+  .x-embed-container {
+    max-width: 100%;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+  }
+
+  .x-embed-container .twitter-tweet {
+    margin: 0 !important;
+    border: 2px solid hsl(var(--border)) !important;
+    border-radius: var(--radius) !important;
+    background: hsl(var(--card)) !important;
+    box-shadow: var(--shadow-inset) !important;
+    max-width: 100% !important;
+  }
+
+  .x-embed-container .twitter-tweet iframe {
+    border: none !important;
+    border-radius: var(--radius) !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Ensure X embeds have proper spacing */
+  .x-embed-container blockquote {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Placeholder post styling */
+  .placeholder-post {
+    padding: 1rem;
+    background: hsl(var(--muted));
+    border: 2px solid hsl(var(--border));
+    border-radius: var(--radius);
+    text-align: center;
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
 }
