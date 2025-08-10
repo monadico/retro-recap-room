@@ -165,12 +165,16 @@ const upload = multer({
 
 // Data file paths for storing metadata
 const PHOTOS_DATA_FILE = path.join(__dirname, 'photos-data.json');
+const VIDEOS_DATA_FILE = path.join(__dirname, 'videos-data.json');
 const XPOSTS_DATA_FILE = path.join(__dirname, 'xposts-data.json');
 const UPLOAD_WHITELIST_FILE = path.join(__dirname, 'upload-whitelist.json');
 
 // Initialize data files if they don't exist
 if (!fs.existsSync(PHOTOS_DATA_FILE)) {
   fs.writeFileSync(PHOTOS_DATA_FILE, JSON.stringify([], null, 2));
+}
+if (!fs.existsSync(VIDEOS_DATA_FILE)) {
+  fs.writeFileSync(VIDEOS_DATA_FILE, JSON.stringify([], null, 2));
 }
 if (!fs.existsSync(XPOSTS_DATA_FILE)) {
   fs.writeFileSync(XPOSTS_DATA_FILE, JSON.stringify([], null, 2));
@@ -197,6 +201,28 @@ function writePhotosData(data) {
     return true;
   } catch (error) {
     console.error('Error writing photos data:', error);
+    return false;
+  }
+}
+
+// Helper function to read videos data
+function readVideosData() {
+  try {
+    const data = fs.readFileSync(VIDEOS_DATA_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading videos data:', error);
+    return [];
+  }
+}
+
+// Helper function to write videos data
+function writeVideosData(data) {
+  try {
+    fs.writeFileSync(VIDEOS_DATA_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error writing videos data:', error);
     return false;
   }
 }
@@ -256,6 +282,71 @@ function requireUploadPermission(req, res, next) {
 }
 
 // Routes
+
+// Video Management Endpoints
+// GET /api/videos - Get all videos
+app.get('/api/videos', (req, res) => {
+  try {
+    const videos = readVideosData();
+    res.json(videos);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch videos' });
+  }
+});
+
+// POST /api/videos - Upload a new video
+app.post('/api/videos', requireUploadPermission, upload.single('video'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    const { title, description } = req.body;
+    const newVideo = {
+      id: Date.now().toString(),
+      url: `/uploads/${req.file.filename}`,
+      title: title || 'Untitled Video',
+      description: description || '',
+      likes: 0,
+      comments: [],
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: req.user.discordId,
+    };
+
+    const videos = readVideosData();
+    videos.push(newVideo);
+    if (writeVideosData(videos)) {
+      res.status(201).json(newVideo);
+    } else {
+      res.status(500).json({ error: 'Failed to save video data' });
+    }
+  } catch (error) {
+    console.error('Video upload error:', error);
+    res.status(500).json({ error: 'Failed to upload video' });
+  }
+});
+
+// DELETE /api/videos/:id - Delete a video
+app.delete('/api/videos/:id', requireUploadPermission, (req, res) => {
+  try {
+    const { id } = req.params;
+    const videos = readVideosData();
+    const index = videos.findIndex(v => v.id === id);
+    if (index === -1) return res.status(404).json({ error: 'Video not found' });
+    if (videos[index].uploadedBy !== req.user.discordId) {
+      return res.status(403).json({ error: 'You can only delete your own videos' });
+    }
+
+    const videoPath = path.join(__dirname, videos[index].url.replace('/uploads/', 'uploads/'));
+    if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+    videos.splice(index, 1);
+    if (writeVideosData(videos)) return res.json({ message: 'Video deleted successfully' });
+    return res.status(500).json({ error: 'Failed to delete video' });
+  } catch (error) {
+    console.error('Video deletion error:', error);
+    res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
 
 // GET /api/photos - Get all photos
 app.get('/api/photos', (req, res) => {
