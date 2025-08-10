@@ -4,17 +4,96 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const session = require('express-session');
+const passport = require('passport');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:8080', credentials: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'uploads')));
 
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'change_this_session_secret_in_production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // set true behind HTTPS/proxy with trust proxy
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax',
+    path: '/',
+  },
+}));
+
+// Passport Discord strategy
+const DiscordStrategy = require('passport-discord').Strategy;
+
+passport.use(
+  new DiscordStrategy(
+    {
+      clientID: process.env.DISCORD_CLIENT_ID || 'your_discord_client_id',
+      clientSecret: process.env.DISCORD_CLIENT_SECRET || 'your_discord_client_secret',
+      callbackURL: process.env.DISCORD_REDIRECT_URI || 'http://localhost:3001/auth/discord/callback',
+      scope: ['identify', 'email'],
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        const userRecord = {
+          discordId: profile.id,
+          username: profile.username,
+          discriminator: profile.discriminator,
+          avatar: profile.avatar,
+          email: profile.email,
+          lastLogin: new Date().toISOString(),
+        };
+        
+        // Save user to users-data.json
+        const users = JSON.parse(fs.readFileSync(path.join(__dirname, 'users-data.json'), 'utf8'));
+        const idx = users.findIndex((u) => u.discordId === userRecord.discordId);
+        if (idx !== -1) {
+          users[idx] = { ...users[idx], ...userRecord };
+        } else {
+          users.push({
+            ...userRecord,
+            joinDate: new Date().toISOString(),
+            profileStats: { photosCount: 0, likesReceived: 0, commentsCount: 0 },
+            favoritePhotos: [],
+          });
+        }
+        fs.writeFileSync(path.join(__dirname, 'users-data.json'), JSON.stringify(users, null, 2));
+        
+        return done(null, { discordId: userRecord.discordId });
+      } catch (err) {
+        return done(err);
+      }
+    }
+  )
+);
+
+passport.serializeUser((user, done) => {
+  done(null, user.discordId);
+});
+
+passport.deserializeUser((discordId, done) => {
+  try {
+    const users = JSON.parse(fs.readFileSync(path.join(__dirname, 'users-data.json'), 'utf8'));
+    const u = users.find((u) => u.discordId === discordId);
+    done(null, u || false);
+  } catch (err) {
+    done(err);
+  }
+});
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
 // Auth routes (Discord OAuth)
-app.use('/auth', require('./routes/auth'));
+app.use('/auth', require('./routes/auth')(passport));
 
 // Specific route for serving uploaded images and videos
 app.get('/uploads/:filename', (req, res) => {
@@ -58,6 +137,7 @@ const upload = multer({
 // Data file paths for storing metadata
 const PHOTOS_DATA_FILE = path.join(__dirname, 'photos-data.json');
 const XPOSTS_DATA_FILE = path.join(__dirname, 'xposts-data.json');
+const UPLOAD_WHITELIST_FILE = path.join(__dirname, 'upload-whitelist.json');
 
 // Initialize data files if they don't exist
 if (!fs.existsSync(PHOTOS_DATA_FILE)) {
@@ -65,6 +145,9 @@ if (!fs.existsSync(PHOTOS_DATA_FILE)) {
 }
 if (!fs.existsSync(XPOSTS_DATA_FILE)) {
   fs.writeFileSync(XPOSTS_DATA_FILE, JSON.stringify([], null, 2));
+}
+if (!fs.existsSync(UPLOAD_WHITELIST_FILE)) {
+  fs.writeFileSync(UPLOAD_WHITELIST_FILE, JSON.stringify([], null, 2));
 }
 
 // Helper function to read photos data
@@ -111,6 +194,38 @@ function writeXPostsData(data) {
   }
 }
 
+// Helper function to read upload whitelist
+function readUploadWhitelist() {
+  try {
+    const data = fs.readFileSync(UPLOAD_WHITELIST_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading upload whitelist:', error);
+    return [];
+  }
+}
+
+// Helper function to check if user can upload
+function canUserUpload(discordId) {
+  const whitelist = readUploadWhitelist();
+  return whitelist.includes(discordId);
+}
+
+// Middleware to check authentication and upload permissions
+function requireUploadPermission(req, res, next) {
+  // Check if user is authenticated
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  // Check if user has upload permission
+  if (!canUserUpload(req.user.discordId)) {
+    return res.status(403).json({ error: 'Upload permission denied. Contact an administrator.' });
+  }
+  
+  next();
+}
+
 // Routes
 
 // GET /api/photos - Get all photos
@@ -124,7 +239,7 @@ app.get('/api/photos', (req, res) => {
 });
 
 // POST /api/photos - Upload a new photo or video
-app.post('/api/photos', upload.single('image'), (req, res) => {
+app.post('/api/photos', requireUploadPermission, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image or video file provided' });
@@ -261,7 +376,7 @@ app.get('/api/xposts', (req, res) => {
 });
 
 // POST /api/xposts - Add a new X post
-app.post('/api/xposts', (req, res) => {
+app.post('/api/xposts', requireUploadPermission, (req, res) => {
   try {
     const { author, content, image, url } = req.body;
     
@@ -694,6 +809,20 @@ app.post('/api/xposts/oembed', async (req, res) => {
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Check upload permissions for current user
+app.get('/api/upload-permissions', (req, res) => {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ canUpload: false, error: 'Not authenticated' });
+  }
+  
+  const canUpload = canUserUpload(req.user.discordId);
+  res.json({ 
+    canUpload,
+    userId: req.user.discordId,
+    username: req.user.username
+  });
 });
 
 // Error handling middleware

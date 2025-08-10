@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Heart, MessageCircle, Send, Upload, Plus } from 'lucide-react';
+import { Heart, MessageCircle, Send, Upload, Plus, Lock, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Comment {
@@ -39,6 +39,7 @@ const fetchPhotos = async (): Promise<Photo[]> => {
 const likePhoto = async (photoId: string): Promise<Photo> => {
   const response = await fetch(`${API_BASE_URL}/photos/${photoId}/like`, {
     method: 'POST',
+    credentials: 'include',
   });
   if (!response.ok) {
     throw new Error('Failed to like photo');
@@ -49,6 +50,7 @@ const likePhoto = async (photoId: string): Promise<Photo> => {
 const addComment = async ({ photoId, user, text }: { photoId: string; user: string; text: string }): Promise<Comment> => {
   const response = await fetch(`${API_BASE_URL}/photos/${photoId}/comments`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -68,8 +70,43 @@ const Gallery: React.FC = () => {
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [canUpload, setCanUpload] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   const queryClient = useQueryClient();
+
+  // Check authentication and upload permissions
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/auth/user', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+          
+          // Check upload permissions
+          const permissionsResponse = await fetch('http://localhost:3001/api/upload-permissions', {
+            credentials: 'include'
+          });
+          
+          if (permissionsResponse.ok) {
+            const permissions = await permissionsResponse.json();
+            setCanUpload(permissions.canUpload);
+          }
+        }
+      } catch (error) {
+        console.log('User not authenticated');
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
 
   // Fetch photos
   const { data: photos = [], isLoading, error } = useQuery({
@@ -126,6 +163,7 @@ const Gallery: React.FC = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/photos`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
 
@@ -168,21 +206,36 @@ const Gallery: React.FC = () => {
   return (
     <div className="h-full flex bg-[hsl(var(--background))]">
       {/* Photo Grid */}
-      <div className="w-1/2 border-r-2" style={{ borderStyle: 'inset' }}>
-        <div className="retro-window-header p-2 border-b-2 flex justify-between items-center" style={{ borderStyle: 'inset' }}>
+      <div className="w-1/2 border-r-2 flex flex-col flex-shrink-0" style={{ borderStyle: 'inset' }}>
+        <div className="retro-window-header p-2 border-b-2 flex justify-between items-center flex-shrink-0" style={{ borderStyle: 'inset' }}>
           <h3 className="font-bold text-sm text-[hsl(var(--foreground))]">📸 Photo Gallery</h3>
-          <Button
-            onClick={() => setShowUploadForm(!showUploadForm)}
-            className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
-          >
-            <Plus size={12} className="mr-1" />
-            Upload
-          </Button>
+          
+          {isCheckingAuth ? (
+            <div className="text-xs text-[hsl(var(--muted-foreground))]">Checking...</div>
+          ) : !user ? (
+            <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+              <Lock size={12} />
+              Login to upload
+            </div>
+          ) : !canUpload ? (
+            <div className="flex items-center gap-2 text-xs text-[hsl(var(--destructive))]">
+              <AlertTriangle size={12} />
+              Upload restricted
+            </div>
+          ) : (
+            <Button
+              onClick={() => setShowUploadForm(!showUploadForm)}
+              className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+            >
+              <Plus size={12} className="mr-1" />
+              Upload
+            </Button>
+          )}
         </div>
 
         {/* Upload Form */}
-        {showUploadForm && (
-          <div className="retro-panel p-3 border-b-2 bg-[hsl(var(--card))]" style={{ borderStyle: 'inset' }}>
+        {showUploadForm && canUpload && (
+          <div className="retro-panel p-3 border-b-2 bg-[hsl(var(--card))] flex-shrink-0" style={{ borderStyle: 'inset' }}>
             <div className="space-y-2">
               <Input
                 value={uploadTitle}
@@ -215,7 +268,48 @@ const Gallery: React.FC = () => {
           </div>
         )}
 
-        <ScrollArea className="h-full p-4">
+        {/* Permission Denied Message */}
+        {showUploadForm && !canUpload && user && (
+          <div className="retro-panel p-3 border-b-2 bg-[hsl(var(--destructive))] flex-shrink-0" style={{ borderStyle: 'inset' }}>
+            <div className="flex items-center gap-2 text-[hsl(var(--destructive-foreground))]">
+              <AlertTriangle size={14} />
+              <span className="text-xs font-medium">
+                Upload access restricted. Contact an administrator to request permission.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Global Permission Notice */}
+        {user && !canUpload && !showUploadForm && (
+          <div className="retro-panel p-2 border-b-2 bg-[hsl(var(--muted))] flex-shrink-0" style={{ borderStyle: 'inset' }}>
+            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+              <Lock size={12} />
+              <span className="text-xs">
+                You can view photos but uploads are restricted. Contact an admin for access.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Login Notice for Non-Authenticated Users */}
+        {!user && !isCheckingAuth && (
+          <div className="retro-panel p-2 border-b-2 bg-[hsl(var(--accent))] flex-shrink-0" style={{ borderStyle: 'inset' }}>
+            <div className="flex items-center gap-2 text-[hsl(var(--accent-foreground))]">
+              <Lock size={12} />
+              <span className="text-xs">
+                Login to upload photos and interact with the gallery
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div 
+          className="flex-1 overflow-y-auto p-4 gallery-scrollbar" 
+          style={{ 
+            minHeight: '200px'
+          }}
+        >
           <div className="grid grid-cols-2 gap-3">
             {photos.map((photo) => (
               <div
@@ -236,26 +330,28 @@ const Gallery: React.FC = () => {
                     {photo.title}
                   </h4>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      ❤️ {photo.likes}
+                    <span className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                      <Heart size={10} className="text-red-500" />
+                      {photo.likes}
                     </span>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      💬 {photo.comments.length}
+                    <span className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                      <MessageCircle size={10} className="text-blue-500" />
+                      {photo.comments.length}
                     </span>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Photo Detail */}
-      <div className="w-1/2 flex flex-col">
+      <div className="w-1/2 flex flex-col flex-shrink-0">
         {selectedPhotoData ? (
           <>
             {/* Photo Display */}
-            <div className="retro-window-header p-2 border-b-2" style={{ borderStyle: 'inset' }}>
+            <div className="retro-window-header p-2 border-b-2 flex-shrink-0" style={{ borderStyle: 'inset' }}>
               <h3 className="font-bold text-sm text-[hsl(var(--foreground))]">
                 {selectedPhotoData.title}
               </h3>
@@ -283,18 +379,27 @@ const Gallery: React.FC = () => {
               
                 {/* Like and Comment Actions */}
                 <div className="flex items-center space-x-2">
-                  <Button
-                    onClick={() => handleLike(selectedPhotoData.id)}
-                    disabled={likeMutation.isPending}
-                    className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"
-                  >
-                    <Heart size={12} className="mr-1" />
-                    {selectedPhotoData.likes}
-                  </Button>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                    <MessageCircle size={12} className="inline mr-1" />
-                    {selectedPhotoData.comments.length} comments
-                  </span>
+                  {user ? (
+                    <>
+                      <Button
+                        onClick={() => handleLike(selectedPhotoData.id)}
+                        disabled={likeMutation.isPending}
+                        className="retro-button px-2 py-1 text-xs h-auto bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"
+                      >
+                        <Heart size={12} className="mr-1" />
+                        {selectedPhotoData.likes}
+                      </Button>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                        <MessageCircle size={12} className="inline mr-1" />
+                        {selectedPhotoData.comments.length} comments
+                      </span>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+                      <Lock size={12} />
+                      Login to interact with photos
+                    </div>
+                  )}
                 </div>
 
                 {/* Comments Section */}
@@ -327,33 +432,42 @@ const Gallery: React.FC = () => {
             </div>
 
             {/* Comment Input - Fixed at bottom */}
-            <div className="retro-window-header p-2 border-t-2" style={{ borderStyle: 'inset' }}>
-              <div className="flex items-center space-x-2 mb-2">
-                <Input
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="text-xs h-6 w-20 retro-input"
-                  placeholder="Name"
-                />
+            {user ? (
+              <div className="retro-window-header p-2 border-t-2 flex-shrink-0" style={{ borderStyle: 'inset' }}>
+                <div className="flex items-center space-x-2 mb-2">
+                  <Input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="text-xs h-6 w-20 retro-input"
+                    placeholder="Name"
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <Input
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleComment(selectedPhotoData.id)}
+                    placeholder="Add a comment..."
+                    className="flex-1 retro-input text-xs"
+                    disabled={commentMutation.isPending}
+                  />
+                  <Button
+                    onClick={() => handleComment(selectedPhotoData.id)}
+                    disabled={commentMutation.isPending || !newComment.trim()}
+                    className="retro-button px-2 py-1 h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+                  >
+                    <Send size={12} />
+                  </Button>
+                </div>
               </div>
-              <div className="flex space-x-2">
-                <Input
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleComment(selectedPhotoData.id)}
-                  placeholder="Add a comment..."
-                  className="flex-1 retro-input text-xs"
-                  disabled={commentMutation.isPending}
-                />
-                <Button
-                  onClick={() => handleComment(selectedPhotoData.id)}
-                  disabled={commentMutation.isPending || !newComment.trim()}
-                  className="retro-button px-2 py-1 h-auto bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
-                >
-                  <Send size={12} />
-                </Button>
+            ) : (
+              <div className="retro-window-header p-2 border-t-2 flex-shrink-0" style={{ borderStyle: 'inset' }}>
+                <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+                  <Lock size={12} />
+                  Login to add comments
+                </div>
               </div>
-            </div>
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-[hsl(var(--muted-foreground))]">

@@ -51,21 +51,38 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
     if (urlParams.get('auth') === 'success') {
       // Clear the URL parameter
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Check auth status after a short delay
+      // Check auth status multiple times to ensure we catch it
       setTimeout(checkAuthStatus, 1000);
+      setTimeout(checkAuthStatus, 2000);
+      setTimeout(checkAuthStatus, 5000);
+      setTimeout(checkAuthStatus, 10000);
     }
   }, []);
 
+  // Debug: Monitor user state changes
+  useEffect(() => {
+    console.log('User state changed:', user);
+  }, [user]);
+
   const checkAuthStatus = async () => {
     try {
+      console.log('Checking authentication status...');
+      console.log('Current cookies:', document.cookie);
+      
       const response = await fetch('http://localhost:3001/auth/user', {
         credentials: 'include'
       });
       
+      console.log('Auth response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
+        console.log('User data received:', data);
+        setUser(data); // Backend now returns user data directly
+        console.log('User state set to:', data);
       } else {
+        console.log('Auth failed, setting user to null');
         setUser(null);
       }
     } catch (error) {
@@ -189,13 +206,24 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       </div>
 
       {/* Profile Modal */}
-      {showProfile && user && (
-        <Profile
-          user={user}
-          onLogout={handleLogout}
-          onClose={() => setShowProfile(false)}
-        />
-      )}
+              {showProfile && user && (
+          <Profile
+            user={user}
+            onLogout={handleLogout}
+            onClose={() => setShowProfile(false)}
+          />
+        )}
+
+        {/* Debug: Manual auth check button */}
+        {process.env.NODE_ENV === 'development' && (
+          <button
+            onClick={checkAuthStatus}
+            className="fixed bottom-4 right-4 bg-blue-500 text-white px-3 py-2 rounded text-xs"
+            style={{ zIndex: 1000 }}
+          >
+            🔄 Check Auth
+          </button>
+        )}
     </>
   );
 };

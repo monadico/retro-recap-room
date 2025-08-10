@@ -383,4 +383,38 @@ All colors MUST be HSL for proper theming.
     color: hsl(var(--muted-foreground));
     font-style: italic;
   }
+
+  /* Gallery specific scrollbar */
+  .gallery-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .gallery-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--card));
+    border-radius: 4px;
+  }
+
+  .gallery-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+    border: 1px solid hsl(var(--card));
+  }
+
+  .gallery-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  /* Ensure gallery container handles overflow properly */
+  .gallery-scrollbar {
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    min-height: 0; /* Important for flexbox scrolling */
+  }
+
+  /* Force scrollbar to show when needed */
+  .gallery-scrollbar::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 8px;
+  }
 }
