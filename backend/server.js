@@ -1,27 +1,56 @@
-require("dotenv").config();
+require("dotenv").config({ override: true });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const session = require('express-session');
+const FileStoreFactory = require('session-file-store');
 const passport = require('passport');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Ensure session storage directory exists (for file-based sessions)
+const sessionsDir = path.join(__dirname, '.sessions');
+if (!fs.existsSync(sessionsDir)) {
+  fs.mkdirSync(sessionsDir, { recursive: true });
+}
+
 // Middleware
-app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:8080', credentials: true }));
+const resolveFrontendOrigin = () => process.env.FRONTEND_ORIGIN || 'http://localhost:8080';
+console.log('[server] FRONTEND_ORIGIN (initial) =', resolveFrontendOrigin());
+const allowedOrigins = [resolveFrontendOrigin(), 'http://localhost:8080', 'http://127.0.0.1:8080'];
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  const originToUse = allowedOrigins.includes(requestOrigin) ? requestOrigin : resolveFrontendOrigin();
+  res.header('Access-Control-Allow-Origin', originToUse);
+  res.header('Vary', 'Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  return next();
+});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'uploads')));
 
 // Session middleware
+const FileStore = FileStoreFactory(session);
+const sessionStore = new FileStore({
+  path: sessionsDir,
+  fileExtension: '.json',
+  retries: 1,
+  logFn: function () {},
+});
+
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || 'change_this_session_secret_in_production',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // set true behind HTTPS/proxy with trust proxy
+    secure: false,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
