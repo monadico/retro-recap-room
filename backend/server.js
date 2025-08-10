@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -12,7 +13,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'uploads')));
 
-// Specific route for serving uploaded images
+// Auth routes (Discord OAuth)
+app.use('/auth', require('./routes/auth'));
+
+// Specific route for serving uploaded images and videos
 app.get('/uploads/:filename', (req, res) => {
   const filename = req.params.filename;
   const filePath = path.join(__dirname, 'uploads', filename);
@@ -20,11 +24,11 @@ app.get('/uploads/:filename', (req, res) => {
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
   } else {
-    res.status(404).json({ error: 'Image not found' });
+    res.status(404).json({ error: 'File not found' });
   }
 });
 
-// Configure multer for file uploads
+// Configure multer for image and video uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/')
@@ -39,15 +43,15 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   fileFilter: function (req, file, cb) {
-    // Only allow images
-    if (file.mimetype.startsWith('image/')) {
+    // Allow images and videos
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed!'), false);
+      cb(new Error('Only image and video files are allowed!'), false);
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 100 * 1024 * 1024 // 100MB limit for videos
   }
 });
 
@@ -119,11 +123,11 @@ app.get('/api/photos', (req, res) => {
   }
 });
 
-// POST /api/photos - Upload a new photo
+// POST /api/photos - Upload a new photo or video
 app.post('/api/photos', upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
+      return res.status(400).json({ error: 'No image or video file provided' });
     }
 
     const { title, description } = req.body;
@@ -225,10 +229,10 @@ app.delete('/api/photos/:id', (req, res) => {
 
     const photo = photos[photoIndex];
     
-    // Delete the image file
-    const imagePath = path.join(__dirname, photo.url);
-    if (fs.existsSync(imagePath)) {
-      fs.unlinkSync(imagePath);
+    // Delete the file
+    const filePath = path.join(__dirname, photo.url);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
     }
 
     // Remove from data

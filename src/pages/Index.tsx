@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import RetroWindow from '../components/RetroWindow';
 import PoolTV from '../components/PoolTV';
-import Guestbook from '../components/Guestbook';
 import Chat from '../components/Chat';
 import Gallery from '../components/Gallery';
 import XFeed from '../components/XFeed';
@@ -22,12 +21,10 @@ const Index = () => {
     const windowId = `${windowType}-${Date.now()}`;
     const windowTitles: Record<string, string> = {
       'pool-tv': 'Pool TV - Video Player',
-      'guestbook': 'Community Guestbook',
       'chat': 'Community Chat',
       'mixtapes': 'Mixtapes - Audio Player',
       'gallery': 'The Gallery - Photo Viewer',
       'x-feed': 'X Feed - Social Media',
-      'calendar': 'Community Events',
       'system': 'System Settings'
     };
 
@@ -55,8 +52,6 @@ const Index = () => {
     switch (windowType) {
       case 'pool-tv':
         return <PoolTV />;
-      case 'guestbook':
-        return <Guestbook />;
       case 'chat':
         return <Chat />;
       case 'gallery':

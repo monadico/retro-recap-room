@@ -1,15 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Tv, 
-  MessageSquare, 
   Music, 
   Image, 
   Twitter,
   Monitor,
-  Calendar,
   Settings,
-  Users
+  Users,
+  User
 } from 'lucide-react';
+import Profile from './Profile';
 
 interface DockItem {
   id: string;
@@ -22,19 +22,86 @@ interface DesktopDockProps {
   onOpenWindow: (windowType: string) => void;
 }
 
+interface UserProfile {
+  discordId: string;
+  username: string;
+  discriminator: string;
+  avatar: string | null;
+  email: string | null;
+  joinDate: string;
+  profileStats: {
+    photosCount: number;
+    likesReceived: number;
+    commentsCount: number;
+  };
+  favoritePhotos: string[];
+}
+
 const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Check authentication status on component mount and after auth success
+  useEffect(() => {
+    checkAuthStatus();
+    
+    // Check if we just came back from OAuth
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('auth') === 'success') {
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Check auth status after a short delay
+      setTimeout(checkAuthStatus, 1000);
+    }
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/auth/user', {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      setUser(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:3001/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      setUser(null);
+      setShowProfile(false);
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
+  const handleProfileClick = () => {
+    if (user) {
+      setShowProfile(true);
+    } else {
+      // Redirect to Discord OAuth
+      window.location.href = 'http://localhost:3001/auth/discord';
+    }
+  };
+
   const dockItems: DockItem[] = [
     {
       id: 'pool-tv',
       label: 'Pool TV',
       icon: <Tv size={24} />,
       onClick: () => onOpenWindow('pool-tv')
-    },
-    {
-      id: 'guestbook',
-      label: 'Guestbook',
-      icon: <MessageSquare size={24} />,
-      onClick: () => onOpenWindow('guestbook')
     },
     {
       id: 'chat',
@@ -61,52 +128,75 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       onClick: () => onOpenWindow('x-feed')
     },
     {
-      id: 'calendar',
-      label: 'Events',
-      icon: <Calendar size={24} />,
-      onClick: () => onOpenWindow('calendar')
-    },
-    {
       id: 'system',
       label: 'System',
       icon: <Settings size={24} />,
       onClick: () => onOpenWindow('system')
+    },
+    {
+      id: 'profile',
+      label: user ? 'Profile' : 'Login',
+      icon: user ? (
+        user.avatar ? (
+          <img 
+            src={user.avatar} 
+            alt="Profile" 
+            className="w-6 h-6 rounded-full"
+          />
+        ) : (
+          <User size={24} />
+        )
+      ) : (
+        <User size={24} />
+      ),
+      onClick: handleProfileClick
     }
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50">
-      {/* Dock Background */}
-      <div className="bg-[hsl(var(--window-bg))] border-t-4 px-4 py-2" style={{ borderStyle: 'outset' }}>
-        <div className="flex items-center justify-center space-x-1">
-          {dockItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={item.onClick}
-              className="retro-button p-3 flex flex-col items-center min-w-[60px] hover:bg-[hsl(var(--button-highlight))] group"
-              title={item.label}
-            >
-              <div className="text-[hsl(var(--foreground))] mb-1">
-                {item.icon}
-              </div>
-              <span className="text-xs font-bold text-[hsl(var(--foreground))] leading-none">
-                {item.label}
-              </span>
-            </button>
-          ))}
+    <>
+      <div className="fixed bottom-0 left-0 right-0 z-50">
+        {/* Dock Background */}
+        <div className="bg-[hsl(var(--window-bg))] border-t-4 px-4 py-2" style={{ borderStyle: 'outset' }}>
+          <div className="flex items-center justify-center space-x-1">
+            {dockItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={item.onClick}
+                className="retro-button p-3 flex flex-col items-center min-w-[60px] hover:bg-[hsl(var(--button-highlight))] group"
+                title={item.label}
+              >
+                <div className="text-[hsl(var(--foreground))] mb-1">
+                  {item.icon}
+                </div>
+                <span className="text-xs font-bold text-[hsl(var(--foreground))] leading-none">
+                  {item.label}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Start Button Style Corner */}
-      <div className="absolute bottom-full left-0">
-        <div className="retro-button px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] font-bold">
-          <div className="flex items-center space-x-2">
-            <Monitor size={16} />
-            <span>Community Retro</span>
+        {/* Start Button Style Corner */}
+        <div className="absolute bottom-full left-0">
+          <div className="retro-button px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] font-bold">
+            <div className="flex items-center space-x-2">
+              <Monitor size={16} />
+              <span>Community Retro</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Profile Modal */}
+      {showProfile && user && (
+        <Profile
+          user={user}
+          onLogout={handleLogout}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
+    </>
   );
 };
 
