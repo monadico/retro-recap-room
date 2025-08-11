@@ -168,6 +168,7 @@ const PHOTOS_DATA_FILE = path.join(__dirname, 'photos-data.json');
 const VIDEOS_DATA_FILE = path.join(__dirname, 'videos-data.json');
 const XPOSTS_DATA_FILE = path.join(__dirname, 'xposts-data.json');
 const UPLOAD_WHITELIST_FILE = path.join(__dirname, 'upload-whitelist.json');
+const MIXTAPES_STATE_FILE = path.join(__dirname, 'mixtapes-state.json');
 
 // Initialize data files if they don't exist
 if (!fs.existsSync(PHOTOS_DATA_FILE)) {
@@ -181,6 +182,15 @@ if (!fs.existsSync(XPOSTS_DATA_FILE)) {
 }
 if (!fs.existsSync(UPLOAD_WHITELIST_FILE)) {
   fs.writeFileSync(UPLOAD_WHITELIST_FILE, JSON.stringify([], null, 2));
+}
+if (!fs.existsSync(MIXTAPES_STATE_FILE)) {
+  fs.writeFileSync(MIXTAPES_STATE_FILE, JSON.stringify({
+    playlistId: 'RDQMwbpzXXO29_k',
+    videoId: '',
+    timeSec: 0,
+    paused: false,
+    updatedAt: 0
+  }, null, 2));
 }
 
 // Helper function to read photos data
@@ -201,6 +211,23 @@ function writePhotosData(data) {
     return true;
   } catch (error) {
     console.error('Error writing photos data:', error);
+    return false;
+  }
+}
+
+// Mixtapes state helpers
+function readMixtapesState() {
+  try {
+    return JSON.parse(fs.readFileSync(MIXTAPES_STATE_FILE, 'utf8'));
+  } catch (e) {
+    return { playlistId: 'RDQMwbpzXXO29_k', videoId: '', timeSec: 0, paused: false, updatedAt: 0 };
+  }
+}
+function writeMixtapesState(state) {
+  try {
+    fs.writeFileSync(MIXTAPES_STATE_FILE, JSON.stringify(state, null, 2));
+    return true;
+  } catch (e) {
     return false;
   }
 }
@@ -282,6 +309,28 @@ function requireUploadPermission(req, res, next) {
 }
 
 // Routes
+// Persist and retrieve Mixtapes (radio) state so the stream continues between empty sessions
+app.get('/api/mixtapes/state', (req, res) => {
+  res.json(readMixtapesState());
+});
+
+app.post('/api/mixtapes/state', (req, res) => {
+  try {
+    const { playlistId, videoId, timeSec, paused, updatedAt } = req.body || {};
+    const current = readMixtapesState();
+    const next = {
+      playlistId: playlistId || current.playlistId,
+      videoId: typeof videoId === 'string' ? videoId : current.videoId,
+      timeSec: Number.isFinite(timeSec) ? Number(timeSec) : current.timeSec,
+      paused: typeof paused === 'boolean' ? paused : current.paused,
+      updatedAt: Number.isFinite(updatedAt) ? Number(updatedAt) : Date.now(),
+    };
+    if (writeMixtapesState(next)) return res.json({ success: true });
+    return res.status(500).json({ success: false });
+  } catch (e) {
+    return res.status(400).json({ success: false, error: 'invalid payload' });
+  }
+});
 
 // Video Management Endpoints
 // GET /api/videos - Get all videos

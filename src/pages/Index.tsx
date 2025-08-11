@@ -4,6 +4,7 @@ import PoolTV from '../components/PoolTV';
 import Chat from '../components/Chat';
 import Gallery from '../components/Gallery';
 import XFeed from '../components/XFeed';
+import Mixtapes from '../components/Mixtapes';
 import DesktopDock from '../components/DesktopDock';
 import retroDesktopBg from '../assets/retro-desktop-bg.jpg';
 
@@ -57,14 +58,7 @@ const Index = () => {
       case 'gallery':
         return <Gallery />;
       case 'mixtapes':
-        return (
-          <div className="h-full flex items-center justify-center text-[hsl(var(--muted-foreground))]">
-            <div className="text-center">
-              <div className="text-4xl mb-4">🎵</div>
-              <p>Mixtapes Player Coming Soon!</p>
-            </div>
-          </div>
-        );
+        return <Mixtapes />;
       case 'x-feed':
         return <XFeed />;
       default:
