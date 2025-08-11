@@ -186,6 +186,7 @@ if (!fs.existsSync(UPLOAD_WHITELIST_FILE)) {
 if (!fs.existsSync(MIXTAPES_STATE_FILE)) {
   fs.writeFileSync(MIXTAPES_STATE_FILE, JSON.stringify({
     playlistId: 'RDQMwbpzXXO29_k',
+    index: 0,
     videoId: '',
     timeSec: 0,
     paused: false,
@@ -220,7 +221,7 @@ function readMixtapesState() {
   try {
     return JSON.parse(fs.readFileSync(MIXTAPES_STATE_FILE, 'utf8'));
   } catch (e) {
-    return { playlistId: 'RDQMwbpzXXO29_k', videoId: '', timeSec: 0, paused: false, updatedAt: 0 };
+    return { playlistId: 'RDQMwbpzXXO29_k', index: 0, videoId: '', timeSec: 0, paused: false, updatedAt: 0 };
   }
 }
 function writeMixtapesState(state) {
@@ -316,10 +317,11 @@ app.get('/api/mixtapes/state', (req, res) => {
 
 app.post('/api/mixtapes/state', (req, res) => {
   try {
-    const { playlistId, videoId, timeSec, paused, updatedAt } = req.body || {};
+    const { playlistId, videoId, timeSec, paused, updatedAt, index } = req.body || {};
     const current = readMixtapesState();
     const next = {
       playlistId: playlistId || current.playlistId,
+      index: Number.isFinite(index) ? Number(index) : (Number.isFinite(current.index) ? current.index : 0),
       videoId: typeof videoId === 'string' ? videoId : current.videoId,
       timeSec: Number.isFinite(timeSec) ? Number(timeSec) : current.timeSec,
       paused: typeof paused === 'boolean' ? paused : current.paused,

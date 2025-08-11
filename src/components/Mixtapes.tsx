@@ -5,15 +5,17 @@ import { ReactTogether, useStateTogether } from 'react-together';
 // We synchronize just two fields across clients: currentTrackIndex and startedAtUtc.
 
 const CONTROLLER_DISCORD_ID = '348265632770424832';
-const PLAYLIST_ID = 'RDQMwbpzXXO29_k';
+const PLAYLIST_ID = 'RDQMPDwr0RxgjY4';
 
 type YTPlayer = any;
 
 const RadioCore: React.FC = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
+  const [playerReady, setPlayerReady] = useState(false);
   const [userDiscordId, setUserDiscordId] = useState<string | null>(null);
   const isController = userDiscordId === CONTROLLER_DISCORD_ID;
+  const [needsStart, setNeedsStart] = useState(false);
 
   // Shared state (controller writes, others follow)
   const [ytState, setYtState] = useStateTogether('yt.state', {
@@ -69,10 +71,34 @@ const RadioCore: React.FC = () => {
           controls: 1,
           rel: 0,
           modestbranding: 1,
+          origin: window.location.origin,
+          playsinline: 1,
         },
         events: {
           onReady: () => {
-            try { playerRef.current?.mute(); } catch {}
+            // Start muted automatically to satisfy autoplay policy
+            setPlayerReady(true);
+            try {
+              playerRef.current?.mute?.();
+              playerRef.current?.playVideo?.();
+              setNeedsStart(false);
+            } catch {}
+          },
+          onError: (e: any) => {
+            // 101/150: embedding disabled; try to skip to next video
+            try {
+              const p = playerRef.current;
+              if (!p) return;
+              if (typeof p.nextVideo === 'function') p.nextVideo();
+              else if (typeof p.getPlaylistIndex === 'function' && typeof p.playVideoAt === 'function') {
+                const idx = (p.getPlaylistIndex?.() ?? 0) + 1;
+                p.playVideoAt(idx);
+              }
+            } catch {}
+          },
+          onStateChange: (e: any) => {
+            const state = e?.data;
+            if (state === 1) setNeedsStart(false); // playing
           },
         },
       });
@@ -80,31 +106,36 @@ const RadioCore: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
+  // Bootstrap from backend persisted state once the player is ready (both controller and listeners)
+  useEffect(() => {
+    if (!playerReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('http://localhost:3001/api/mixtapes/state');
+        if (!r.ok) return;
+        const s = await r.json();
+        const p = playerRef.current;
+        if (!p || cancelled) return;
+        try {
+          // If saved videoId exists, cue playlist at saved index and then seek
+          if (typeof p.cuePlaylist === 'function') {
+            p.cuePlaylist({ listType: 'playlist', list: PLAYLIST_ID, index: s.index || 0, startSeconds: s.timeSec || 0, suggestedQuality: 'default' });
+            if (!s.paused && typeof p.playVideo === 'function') p.playVideo();
+            if (s.paused && typeof p.pauseVideo === 'function') p.pauseVideo();
+          } else if (typeof p.loadVideoById === 'function' && s.videoId) {
+            p.loadVideoById({ videoId: s.videoId, startSeconds: s.timeSec || 0 });
+          }
+        } catch {}
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [playerReady]);
+
   // Controller publishes state periodically
   useEffect(() => {
     if (!isController) return;
-    // one-time bootstrap from backend persisted state
-    (async () => {
-      if (bootstrapped) return;
-      try {
-        const r = await fetch('http://localhost:3001/api/mixtapes/state');
-        if (r.ok) {
-          const s = await r.json();
-          const p = playerRef.current;
-          if (p && s) {
-            try {
-              if (s.videoId && typeof p.loadVideoById === 'function') {
-                p.loadVideoById({ videoId: s.videoId, startSeconds: s.timeSec || 0 });
-              } else if (typeof p.seekTo === 'function') {
-                p.seekTo(s.timeSec || 0, true);
-              }
-              if (s.paused && typeof p.pauseVideo === 'function') p.pauseVideo();
-            } catch {}
-          }
-        }
-      } catch {}
-      setBootstrapped(true);
-    })();
+    if (!bootstrapped) setBootstrapped(true);
     const t = setInterval(() => {
       const p = playerRef.current;
       if (!p || typeof p.getCurrentTime !== 'function') return;
@@ -112,18 +143,45 @@ const RadioCore: React.FC = () => {
       const timeSec = Math.floor(p.getCurrentTime?.() || 0);
       const ps = p.getPlayerState?.();
       const paused = ps === 2; // 2 = PAUSED
+      const index = typeof p.getPlaylistIndex === 'function' ? (p.getPlaylistIndex() ?? 0) : 0;
       setYtState({ videoId, timeSec, paused, updatedAt: Date.now() });
       // persist to backend for continuity when sessions are empty
       try {
         fetch('http://localhost:3001/api/mixtapes/state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, updatedAt: Date.now() }),
+          body: JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, index, updatedAt: Date.now() }),
         });
       } catch {}
     }, 1500);
     return () => clearInterval(t);
   }, [isController, setYtState, bootstrapped]);
+
+  // On unload, persist one last time (controller only)
+  useEffect(() => {
+    if (!isController) return;
+    const handler = () => {
+      try {
+        const p = playerRef.current;
+        if (!p) return;
+        const videoId = p.getVideoData()?.video_id || '';
+        const timeSec = Math.floor(p.getCurrentTime?.() || 0);
+        const ps = p.getPlayerState?.();
+        const paused = ps === 2;
+        const index = typeof p.getPlaylistIndex === 'function' ? (p.getPlaylistIndex() ?? 0) : 0;
+        navigator.sendBeacon?.('http://localhost:3001/api/mixtapes/state', new Blob([
+          JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, index, updatedAt: Date.now() })
+        ], { type: 'application/json' }));
+      } catch {}
+    };
+    window.addEventListener('beforeunload', handler);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') handler();
+    });
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+    };
+  }, [isController]);
 
   // Followers apply shared state
   useEffect(() => {
@@ -150,7 +208,7 @@ const RadioCore: React.FC = () => {
         <div className="text-xs opacity-70">{isController ? 'Controller' : 'Listener'}</div>
       </div>
       <div className="p-3 text-xs opacity-70">Playlist: {PLAYLIST_ID}</div>
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center relative">
         <div ref={containerRef} />
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import RetroWindow from '../components/RetroWindow';
 import PoolTV from '../components/PoolTV';
 import Chat from '../components/Chat';
@@ -17,6 +17,18 @@ interface OpenWindow {
 
 const Index = () => {
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
+
+  const [showGate, setShowGate] = useState(true);
+
+  const handleEnter = () => {
+    // Signal user gesture for audio start
+    (window as any).__enterTimeCapsule = true;
+    // If the Mixtapes player already mounted, trigger the same start routine
+    const tryStart = (window as any).__startMixtapes as (() => void) | undefined;
+    if (tryStart) tryStart();
+    openWindow('mixtapes');
+    setShowGate(false);
+  };
 
   const openWindow = (windowType: string) => {
     const windowId = `${windowType}-${Date.now()}`;
@@ -107,6 +119,18 @@ const Index = () => {
 
       {/* Desktop Dock */}
       <DesktopDock onOpenWindow={openWindow} />
+
+      {/* Entrance Overlay */}
+      {showGate && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
+          <button
+            onClick={handleEnter}
+            className="retro-button px-6 py-3 text-lg font-bold"
+          >
+            Enter the time capsule
+          </button>
+        </div>
+      )}
     </div>
   );
 };
