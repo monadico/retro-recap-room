@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -12,6 +12,33 @@ interface ChatMessage {
 }
 
 const Chat: React.FC = () => {
+  // Check authentication and set username on component mount
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/auth/user', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+          // Automatically set username from Discord user
+          setUsername(userData.username || 'Anonymous');
+        } else {
+          setUser(null);
+          setUsername('Anonymous');
+        }
+      } catch (error) {
+        console.log('User not authenticated');
+        setUser(null);
+        setUsername('Anonymous');
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -33,7 +60,8 @@ const Chat: React.FC = () => {
     }
   ]);
   const [newMessage, setNewMessage] = useState('');
-  const [username, setUsername] = useState('Anonymous');
+  const [username, setUsername] = useState('');
+  const [user, setUser] = useState<any>(null);
 
   const handleSendMessage = () => {
     if (newMessage.trim()) {
@@ -59,13 +87,18 @@ const Chat: React.FC = () => {
       {/* Chat Header */}
       <div className="retro-window-header p-3 border-b-2" style={{ borderStyle: 'inset' }}>
         <div className="flex items-center space-x-2">
-          <User size={16} className="text-[hsl(var(--foreground))]" />
-          <Input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="text-xs h-6 w-24 retro-input"
-            placeholder="Your name"
-          />
+          {user?.avatar ? (
+            <img 
+              src={user.avatar} 
+              alt="Profile" 
+              className="w-6 h-6 rounded-full border-2 border-[hsl(var(--border))]"
+            />
+          ) : (
+            <User size={16} className="text-[hsl(var(--foreground))]" />
+          )}
+          <span className="text-sm text-[hsl(var(--foreground))]">
+            Chatting as: <span className="font-bold text-[hsl(var(--primary))]">{username}</span>
+          </span>
         </div>
       </div>
 
@@ -75,9 +108,17 @@ const Chat: React.FC = () => {
           {messages.map((msg) => (
             <div key={msg.id} className="retro-panel p-3 bg-[hsl(var(--card))]">
               <div className="flex items-start space-x-2">
-                <div className="retro-button p-1 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
-                  <User size={12} />
-                </div>
+                {msg.user === username && user?.avatar ? (
+                  <img 
+                    src={user.avatar} 
+                    alt="Profile" 
+                    className="w-6 h-6 rounded-full border border-[hsl(var(--border))]"
+                  />
+                ) : (
+                  <div className="retro-button p-1 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                    <User size={12} />
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="font-bold text-xs text-[hsl(var(--foreground))]">

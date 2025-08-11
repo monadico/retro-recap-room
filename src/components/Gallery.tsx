@@ -47,14 +47,14 @@ const likePhoto = async (photoId: string): Promise<Photo> => {
   return response.json();
 };
 
-const addComment = async ({ photoId, user, text }: { photoId: string; user: string; text: string }): Promise<Comment> => {
+const addComment = async ({ photoId, text }: { photoId: string; text: string }): Promise<Comment> => {
   const response = await fetch(`${API_BASE_URL}/photos/${photoId}/comments`, {
     method: 'POST',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ user, text }),
+    body: JSON.stringify({ text }),
   });
   if (!response.ok) {
     throw new Error('Failed to add comment');
@@ -65,7 +65,7 @@ const addComment = async ({ photoId, user, text }: { photoId: string; user: stri
 const Gallery: React.FC = () => {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
-  const [username, setUsername] = useState('Anonymous');
+  const [username, setUsername] = useState('');
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
@@ -87,6 +87,8 @@ const Gallery: React.FC = () => {
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
+          // Automatically set username from Discord user
+          setUsername(userData.username || 'Anonymous');
           
           // Check upload permissions
           const permissionsResponse = await fetch('http://localhost:3001/api/upload-permissions', {
@@ -136,10 +138,9 @@ const Gallery: React.FC = () => {
   };
 
   const handleComment = (photoId: string) => {
-    if (newComment.trim() && username.trim()) {
+    if (newComment.trim()) {
       commentMutation.mutate({
         photoId,
-        user: username.trim(),
         text: newComment.trim(),
       });
     }
@@ -435,12 +436,9 @@ const Gallery: React.FC = () => {
             {user ? (
               <div className="retro-window-header p-2 border-t-2 flex-shrink-0" style={{ borderStyle: 'inset' }}>
                 <div className="flex items-center space-x-2 mb-2">
-                  <Input
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="text-xs h-6 w-20 retro-input"
-                    placeholder="Name"
-                  />
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Commenting as: <span className="font-bold text-[hsl(var(--primary))]">{username}</span>
+                  </span>
                 </div>
                 <div className="flex space-x-2">
                   <Input

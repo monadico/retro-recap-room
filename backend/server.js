@@ -66,7 +66,7 @@ passport.use(
     {
       clientID: process.env.DISCORD_CLIENT_ID || 'your_discord_client_id',
       clientSecret: process.env.DISCORD_CLIENT_SECRET || 'your_discord_client_secret',
-      callbackURL: process.env.DISCORD_REDIRECT_URI || 'http://localhost:3001/auth/discord/callback',
+      callbackURL: process.env.DISCORD_REDIRECT_URI,
       scope: ['identify', 'email'],
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -470,11 +470,19 @@ app.post('/api/photos/:id/like', (req, res) => {
 app.post('/api/photos/:id/comments', (req, res) => {
   try {
     const { id } = req.params;
-    const { user, text } = req.body;
+    const { text } = req.body;
     
-    if (!user || !text) {
-      return res.status(400).json({ error: 'User and text are required' });
+    // Check if user is authenticated
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
+    
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    // Use authenticated user's Discord username
+    const user = req.user.username;
 
     const photos = readPhotosData();
     const photoIndex = photos.findIndex(p => p.id === id);
