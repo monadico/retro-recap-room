@@ -7,6 +7,7 @@ const multer = require('multer');
 const session = require('express-session');
 const FileStoreFactory = require('session-file-store');
 const passport = require('passport');
+const WebSocket = require('ws');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -169,6 +170,7 @@ const VIDEOS_DATA_FILE = path.join(__dirname, 'videos-data.json');
 const XPOSTS_DATA_FILE = path.join(__dirname, 'xposts-data.json');
 const UPLOAD_WHITELIST_FILE = path.join(__dirname, 'upload-whitelist.json');
 const MIXTAPES_STATE_FILE = path.join(__dirname, 'mixtapes-state.json');
+const CHAT_DATA_FILE = path.join(__dirname, 'chat-data.json');
 
 // Initialize data files if they don't exist
 if (!fs.existsSync(PHOTOS_DATA_FILE)) {
@@ -191,6 +193,12 @@ if (!fs.existsSync(MIXTAPES_STATE_FILE)) {
     timeSec: 0,
     paused: false,
     updatedAt: 0
+  }, null, 2));
+}
+if (!fs.existsSync(CHAT_DATA_FILE)) {
+  fs.writeFileSync(CHAT_DATA_FILE, JSON.stringify({
+    messages: [],
+    users: []
   }, null, 2));
 }
 
@@ -292,6 +300,27 @@ function readUploadWhitelist() {
 function canUserUpload(discordId) {
   const whitelist = readUploadWhitelist();
   return whitelist.includes(discordId);
+}
+
+// Chat data helpers
+function readChatData() {
+  try {
+    const data = fs.readFileSync(CHAT_DATA_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading chat data:', error);
+    return { messages: [], users: [] };
+  }
+}
+
+function writeChatData(data) {
+  try {
+    fs.writeFileSync(CHAT_DATA_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error writing chat data:', error);
+    return false;
+  }
 }
 
 // Middleware to check authentication and upload permissions
@@ -1010,8 +1039,149 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Retro Recap Backend running on port ${PORT}`);
   console.log(`📸 Photo uploads will be stored in: ${path.join(__dirname, 'uploads')}`);
   console.log(`📊 Photo data stored in: ${PHOTOS_DATA_FILE}`);
-}); 
+});
+
+// WebSocket server for real-time chat
+const wss = new WebSocket.Server({ server });
+
+// Store connected clients
+const connectedClients = new Map();
+
+// WebSocket connection handler
+wss.on('connection', (ws, req) => {
+  console.log('🔌 New WebSocket connection');
+  
+  // Store client info
+  const clientId = Date.now().toString();
+  connectedClients.set(clientId, {
+    ws,
+    userId: null,
+    username: null,
+    avatar: null
+  });
+
+  // Send initial chat data
+  const chatData = readChatData();
+  ws.send(JSON.stringify({
+    type: 'chat_data',
+    messages: chatData.messages.slice(-50), // Last 50 messages
+    users: chatData.users
+  }));
+
+  // Handle incoming messages
+  ws.on('message', (data) => {
+    try {
+      const message = JSON.parse(data);
+      
+      switch (message.type) {
+        case 'user_join':
+          // Update client info
+          const client = connectedClients.get(clientId);
+          if (client) {
+            client.userId = message.userId;
+            client.username = message.username;
+            client.avatar = message.avatar;
+          }
+          
+          // Add user to chat data
+          const chatData = readChatData();
+          if (!chatData.users.find(u => u.userId === message.userId)) {
+            chatData.users.push({
+              userId: message.userId,
+              username: message.username,
+              avatar: message.avatar,
+              joinedAt: new Date().toISOString()
+            });
+            writeChatData(chatData);
+          }
+          
+          // Broadcast user joined
+          broadcastToAll({
+            type: 'user_joined',
+            userId: message.userId,
+            username: message.username,
+            avatar: message.avatar
+          });
+          break;
+
+        case 'chat_message':
+          // Add message to chat data
+          const newMessage = {
+            id: Date.now().toString(),
+            userId: message.userId,
+            username: message.username,
+            avatar: message.avatar,
+            message: message.message,
+            timestamp: Date.now()
+          };
+          
+          const currentChatData = readChatData();
+          currentChatData.messages.push(newMessage);
+          
+          // Keep only last 100 messages
+          if (currentChatData.messages.length > 100) {
+            currentChatData.messages = currentChatData.messages.slice(-100);
+          }
+          
+          writeChatData(currentChatData);
+          
+          // Broadcast message to all clients
+          broadcastToAll({
+            type: 'new_message',
+            message: newMessage
+          });
+          break;
+
+        case 'typing_start':
+        case 'typing_stop':
+          // Broadcast typing indicators
+          broadcastToAll({
+            type: message.type,
+            userId: message.userId,
+            username: message.username
+          });
+          break;
+      }
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error);
+    }
+  });
+
+  // Handle client disconnect
+  ws.on('close', () => {
+    console.log('🔌 WebSocket connection closed');
+    connectedClients.delete(clientId);
+    
+    // Broadcast user left
+    const client = connectedClients.get(clientId);
+    if (client && client.userId) {
+      broadcastToAll({
+        type: 'user_left',
+        userId: client.userId,
+        username: client.username
+      });
+    }
+  });
+
+  // Handle errors
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+    connectedClients.delete(clientId);
+  });
+});
+
+// Helper function to broadcast to all connected clients
+function broadcastToAll(data) {
+  const message = JSON.stringify(data);
+  connectedClients.forEach((client) => {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(message);
+    }
+  });
+}
+
+console.log('💬 WebSocket chat server initialized'); 
