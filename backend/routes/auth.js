@@ -1,5 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const { SiweMessage, generateNonce } = require('siwe');
 
 module.exports = function(passport) {
   const router = express.Router();
@@ -23,16 +26,6 @@ router.use((req, res, next) => {
   return next();
 });
 
-// User data storage is now handled in the main server
-
-
-
-
-
-
-
-
-
 function toPublicUser(u) {
   if (!u) return null;
   const avatarUrl = u.avatar
@@ -47,10 +40,9 @@ function toPublicUser(u) {
     joinDate: u.joinDate,
     profileStats: u.profileStats || { photosCount: 0, likesReceived: 0, commentsCount: 0 },
     favoritePhotos: u.favoritePhotos || [],
+    walletAddress: u.walletAddress || null,
   };
 }
-
-// Passport strategy is now defined in the main server
 
 // Routes
 router.get('/discord', passport.authenticate('discord'));
@@ -90,6 +82,61 @@ router.post('/logout', (req, res, next) => {
     if (err) return next(err);
     res.json({ message: 'Logged out' });
   });
+});
+
+// SIWE endpoints
+router.get('/siwe/nonce', (req, res) => {
+  try {
+    const nonce = generateNonce();
+    req.session.siweNonce = nonce;
+    res.json({ nonce });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to create nonce' });
+  }
+});
+
+router.post('/siwe/verify', express.json(), async (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const { message, signature } = req.body || {};
+    if (!message || !signature) {
+      return res.status(400).json({ error: 'Missing message or signature' });
+    }
+
+    const siweMessage = new SiweMessage(message);
+    const { data: fields } = await siweMessage.verify({
+      signature,
+      nonce: req.session.siweNonce,
+    });
+
+    // Link wallet to the Discord user
+    const usersPath = path.join(__dirname, '..', 'users-data.json');
+    const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    const idx = users.findIndex((u) => u.discordId === req.user.discordId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+
+    users[idx].walletAddress = fields.address;
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+
+    // Also update req.user for this session
+    req.user.walletAddress = fields.address;
+
+    return res.json({ success: true, walletAddress: fields.address });
+  } catch (e) {
+    console.error('SIWE verify error:', e);
+    return res.status(400).json({ error: 'Invalid SIWE message' });
+  }
+});
+
+router.get('/siwe/status', (req, res) => {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  const walletAddress = req.user?.walletAddress || null;
+  res.json({ walletAddress });
 });
 
   return router;

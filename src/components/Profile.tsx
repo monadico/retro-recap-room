@@ -1,5 +1,8 @@
-import React from 'react';
-import { LogOut, User } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { LogOut, User, Wallet, CheckCircle2, Link as LinkIcon, AlertTriangle, PlugZap, Network } from 'lucide-react';
+import { useAccount, useChainId, useSwitchChain, useDisconnect } from 'wagmi';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { SiweMessage } from 'siwe';
 
 interface UserProfile {
   discordId: string;
@@ -14,6 +17,7 @@ interface UserProfile {
     commentsCount: number;
   };
   favoritePhotos: string[];
+  walletAddress?: string | null;
 }
 
 interface ProfileProps {
@@ -22,7 +26,54 @@ interface ProfileProps {
   onClose: () => void;
 }
 
+const TARGET_CHAIN_ID = 10143; // Monad Testnet
+
 const Profile: React.FC<ProfileProps> = ({ user, onLogout, onClose }) => {
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { disconnect } = useDisconnect();
+  const { openConnectModal } = useConnectModal();
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkedAddress, setLinkedAddress] = useState<string | null>(user.walletAddress || null);
+
+  // On mount, ask backend for current SIWE link status so the modal always reflects persisted state
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLinkStatus = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/auth/siwe/status', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted) setLinkedAddress(data.walletAddress || null);
+      } catch (_) {
+        // ignore
+      }
+    };
+    fetchLinkStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // If parent prop provides a wallet address later, adopt it (but don't clear an existing link to null)
+  useEffect(() => {
+    if (user.walletAddress) {
+      setLinkedAddress(user.walletAddress);
+    }
+  }, [user.walletAddress]);
+
+  useEffect(() => {
+    if (isConnected && chainId !== TARGET_CHAIN_ID) {
+      try {
+        switchChain({ chainId: TARGET_CHAIN_ID });
+      } catch (e) {
+        // RainbowKit will prompt the user if necessary
+      }
+    }
+  }, [isConnected, chainId, switchChain]);
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -30,6 +81,71 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onClose }) => {
       day: 'numeric'
     });
   };
+
+  const shorten = (addr?: string | null) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '';
+
+  const handleLinkWallet = async () => {
+    try {
+      setLinkError(null);
+      setLinking(true);
+
+      if (!isConnected || !address) {
+        openConnectModal?.();
+        setLinking(false);
+        return;
+      }
+
+      // 1) Get nonce from backend
+      const nonceRes = await fetch('http://localhost:3001/auth/siwe/nonce', { credentials: 'include' });
+      if (!nonceRes.ok) throw new Error('Failed to get nonce');
+      const { nonce } = await nonceRes.json();
+
+      // 2) Build SIWE message
+      const domain = window.location.host;
+      const origin = window.location.origin;
+      const statement = 'Link your wallet to your Discord account in Retro Recap Room';
+      const siweMessage = new SiweMessage({
+        domain,
+        address,
+        statement,
+        uri: origin,
+        version: '1',
+        chainId: TARGET_CHAIN_ID,
+        nonce,
+      });
+
+      // 3) Request signature via wallet
+      const preparedMessage = siweMessage.prepareMessage();
+      // @ts-ignore
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [preparedMessage, address],
+      });
+
+      // 4) Verify on backend
+      const verifyRes = await fetch('http://localhost:3001/auth/siwe/verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: preparedMessage, signature }),
+      });
+
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json().catch(() => ({}));
+        throw new Error(err?.error || 'Verification failed');
+      }
+      const data = await verifyRes.json();
+      setLinkedAddress(data.walletAddress || address);
+    } catch (e: any) {
+      setLinkError(e?.message || 'Failed to link wallet');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const walletConnected = isConnected && !!address;
+  const onWrongNetwork = walletConnected && chainId !== TARGET_CHAIN_ID;
+  const walletLinked = !!linkedAddress;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -64,12 +180,71 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onClose }) => {
               </div>
             )}
             <div>
-              <h3 className="text-lg font-bold text-[hsl(var(--foreground))]">
-                {user.username}
-              </h3>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                #{user.discriminator}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold text-[hsl(var(--foreground))]">
+                  {user.username}
+                </h3>
+                {/* Wallet indicator */}
+                {!walletConnected ? (
+                  <button
+                    className="inline-flex items-center gap-1 text-xs retro-button px-2 py-0.5"
+                    onClick={() => openConnectModal?.()}
+                    title="Connect wallet"
+                  >
+                    <Wallet size={12} /> Connect
+                  </button>
+                ) : (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle2 size={12} /> {shorten(address)}
+                    </span>
+                    <button
+                      onClick={() => disconnect()}
+                      className="inline-flex items-center gap-1 text-xs retro-button px-2 py-0.5"
+                      title="Disconnect wallet"
+                    >
+                      <PlugZap size={12} /> Disconnect
+                    </button>
+                    {onWrongNetwork && (
+                      <button
+                        onClick={() => switchChain({ chainId: TARGET_CHAIN_ID })}
+                        disabled={isSwitching}
+                        className="inline-flex items-center gap-1 text-xs retro-button px-2 py-0.5"
+                        title="Switch to Monad Testnet"
+                      >
+                        <Network size={12} /> {isSwitching ? 'Switching…' : 'Switch to Monad'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">#{user.discriminator}</p>
+              {onWrongNetwork && (
+                <div className="mt-1 text-xs text-yellow-700 inline-flex items-center gap-1">
+                  <AlertTriangle size={12} /> Wrong network, please switch to Monad Testnet.
+                </div>
+              )}
+              {/* Link status / action */}
+              <div className="mt-1 text-xs">
+                {walletConnected && !walletLinked && !onWrongNetwork && (
+                  <button
+                    onClick={handleLinkWallet}
+                    className="inline-flex items-center gap-1 retro-button px-2 py-0.5"
+                    disabled={linking}
+                    title="Link this wallet to your Discord account"
+                  >
+                    <LinkIcon size={12} /> {linking ? 'Linking…' : 'Link wallet to Discord'}
+                  </button>
+                )}
+                {walletLinked && (
+                  <div className="inline-flex items-center gap-1 text-[hsl(var(--muted-foreground))]">
+                    Linked: {shorten(linkedAddress)}
+                  </div>
+                )}
+                {linkError && (
+                  <div className="text-red-600 mt-1">{linkError}</div>
+                )}
+              </div>
             </div>
           </div>
 

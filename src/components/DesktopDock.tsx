@@ -35,6 +35,7 @@ interface UserProfile {
     commentsCount: number;
   };
   favoritePhotos: string[];
+  walletAddress?: string | null;
 }
 
 const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
@@ -90,6 +91,13 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       setUser(null);
     }
   };
+
+  // Refresh user data when profile modal is closed, so any new wallet link is reflected next time it's opened
+  useEffect(() => {
+    if (!showProfile) {
+      checkAuthStatus();
+    }
+  }, [showProfile]);
 
   const handleLogout = async () => {
     try {
@@ -149,6 +157,12 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       label: 'System',
       icon: <Settings size={24} />,
       onClick: () => onOpenWindow('system')
+    },
+    {
+      id: 'mint-nft',
+      label: 'Mint NFT',
+      icon: <Image size={24} />,
+      onClick: () => onOpenWindow('mint-nft')
     },
     {
       id: 'profile',

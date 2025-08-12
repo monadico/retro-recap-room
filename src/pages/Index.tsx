@@ -5,6 +5,7 @@ import Chat from '../components/Chat';
 import Gallery from '../components/Gallery';
 import XFeed from '../components/XFeed';
 import Mixtapes from '../components/Mixtapes';
+import MintNFT from '../components/MintNFT';
 import DesktopDock from '../components/DesktopDock';
 import retroDesktopBg from '../assets/retro-desktop-bg.jpg';
 
@@ -38,7 +39,8 @@ const Index = () => {
       'mixtapes': 'Mixtapes - Audio Player',
       'gallery': 'The Gallery - Photo Viewer',
       'x-feed': 'X Feed - Social Media',
-      'system': 'System Settings'
+      'system': 'System Settings',
+      'mint-nft': 'Mint NFT'
     };
 
     const newWindow: OpenWindow = {
@@ -73,6 +75,8 @@ const Index = () => {
         return <Mixtapes />;
       case 'x-feed':
         return <XFeed />;
+      case 'mint-nft':
+        return <MintNFT />;
       default:
         return (
           <div className="h-full flex items-center justify-center text-[hsl(var(--muted-foreground))]">
