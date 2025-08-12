@@ -8,6 +8,7 @@ const session = require('express-session');
 const FileStoreFactory = require('session-file-store');
 const passport = require('passport');
 const WebSocket = require('ws');
+const { ethers: Ethers } = require('ethers');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -171,6 +172,9 @@ const XPOSTS_DATA_FILE = path.join(__dirname, 'xposts-data.json');
 const UPLOAD_WHITELIST_FILE = path.join(__dirname, 'upload-whitelist.json');
 const MIXTAPES_STATE_FILE = path.join(__dirname, 'mixtapes-state.json');
 const CHAT_DATA_FILE = path.join(__dirname, 'chat-data.json');
+const ACHIEVEMENTS_MINTED_FILE = path.join(__dirname, 'achievements-minted.json');
+const CONTRACT_ADDRESS_FILE = path.join(__dirname, 'nft-contract-address.txt');
+const SIGNER_KEY_FILE = path.join(__dirname, 'achievements-signer.key');
 
 // Initialize data files if they don't exist
 if (!fs.existsSync(PHOTOS_DATA_FILE)) {
@@ -200,6 +204,20 @@ if (!fs.existsSync(CHAT_DATA_FILE)) {
     messages: [],
     users: []
   }, null, 2));
+}
+if (!fs.existsSync(ACHIEVEMENTS_MINTED_FILE)) {
+  fs.writeFileSync(ACHIEVEMENTS_MINTED_FILE, JSON.stringify([], null, 2));
+}
+
+// Helper to read users data
+function readUsersData() {
+  try {
+    const data = fs.readFileSync(path.join(__dirname, 'users-data.json'), 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading users data:', error);
+    return [];
+  }
 }
 
 // Helper function to read photos data
@@ -319,6 +337,24 @@ function writeChatData(data) {
     return true;
   } catch (error) {
     console.error('Error writing chat data:', error);
+    return false;
+  }
+}
+
+// Minted achievements persistence
+function readMintedAchievements() {
+  try {
+    const data = fs.readFileSync(ACHIEVEMENTS_MINTED_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (e) {
+    return [];
+  }
+}
+function writeMintedAchievements(records) {
+  try {
+    fs.writeFileSync(ACHIEVEMENTS_MINTED_FILE, JSON.stringify(records, null, 2));
+    return true;
+  } catch (e) {
     return false;
   }
 }
@@ -447,7 +483,7 @@ app.post('/api/photos', requireUploadPermission, upload.single('image'), (req, r
 
     const { title, description } = req.body;
     
-    const newPhoto = {
+  const newPhoto = {
       id: Date.now().toString(),
       url: `/uploads/${req.file.filename}`,
       title: title || 'Untitled Photo',
@@ -455,7 +491,8 @@ app.post('/api/photos', requireUploadPermission, upload.single('image'), (req, r
       likes: 0,
       comments: [],
       likedByUser: false,
-      uploadedAt: new Date().toISOString()
+    uploadedAt: new Date().toISOString(),
+    uploadedBy: req.user?.discordId || null
     };
 
     const photos = readPhotosData();
@@ -469,6 +506,222 @@ app.post('/api/photos', requireUploadPermission, upload.single('image'), (req, r
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload photo' });
+  }
+});
+
+// Achievements: compute per-user activity and map to badge definitions
+const ACHIEVEMENTS = [
+  {
+    id: 'first-login',
+    name: 'First Login',
+    description: 'Logged in with Discord for the first time.',
+    check: (ctx) => ctx.user != null,
+  },
+  {
+    id: 'first-chat',
+    name: 'First Message',
+    description: 'Sent your first chat message.',
+    check: (ctx) => ctx.chatMessagesCount > 0,
+  },
+  {
+    id: 'chatter-10',
+    name: 'Chatter (10)',
+    description: 'Sent 10 chat messages.',
+    check: (ctx) => ctx.chatMessagesCount >= 10,
+  },
+  {
+    id: 'uploader',
+    name: 'First Upload',
+    description: 'Uploaded your first photo or video.',
+    check: (ctx) => ctx.uploadsCount > 0,
+  },
+  {
+    id: 'gallery-contributor-5',
+    name: 'Gallery Contributor (5)',
+    description: 'Uploaded 5 photos or videos.',
+    check: (ctx) => ctx.uploadsCount >= 5,
+  },
+];
+
+function buildUserActivityContext(discordId) {
+  const photos = readPhotosData();
+  const videos = readVideosData();
+  const chat = readChatData();
+  const uploadsCount = photos.filter(p => p.uploadedBy === discordId).length +
+    videos.filter(v => v.uploadedBy === discordId).length;
+  const chatMessagesCount = chat.messages.filter(m => m.userId === discordId).length;
+  const users = readUsersData();
+  const user = users.find(u => u.discordId === discordId) || null;
+  return { uploadsCount, chatMessagesCount, user };
+}
+
+// Public endpoint: achievements for current user
+app.get('/api/achievements', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const discordId = req.user.discordId;
+    const ctx = buildUserActivityContext(discordId);
+    const items = ACHIEVEMENTS.map(a => ({
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      earned: Boolean(a.check(ctx)),
+    }));
+    // overlay minted status
+    const minted = readMintedAchievements().filter(r => r.discordId === discordId);
+    const itemsWithMint = items.map(it => ({
+      ...it,
+      minted: minted.some(m => m.achievementId === it.id),
+      mintedTx: minted.find(m => m.achievementId === it.id)?.txHash || null,
+    }));
+    res.json({ achievements: itemsWithMint });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to compute achievements' });
+  }
+});
+
+// Helper endpoint: build badge metadata for an achievement (for use as tokenURI)
+app.get('/api/achievements/:id/metadata', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const id = req.params.id;
+    const def = ACHIEVEMENTS.find(a => a.id === id);
+    if (!def) return res.status(404).json({ error: 'Achievement not found' });
+    const user = req.user;
+    const name = `${def.name} — ${user.username}`;
+    const description = def.description;
+    const image = `${req.protocol}://${req.get('host')}/uploads/retro-desktop-bg.jpg`; // placeholder
+    const attributes = [
+      { trait_type: 'achievement_id', value: def.id },
+      { trait_type: 'user', value: user.username },
+      { trait_type: 'discord_id', value: user.discordId },
+    ];
+    res.json({ name, description, image, attributes });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to build metadata' });
+  }
+});
+
+// Issue an EIP-712 permit for minting an earned achievement
+app.post('/api/achievements/:id/permit', express.json(), async (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const id = req.params.id;
+    const def = ACHIEVEMENTS.find(a => a.id === id);
+    if (!def) return res.status(404).json({ error: 'Achievement not found' });
+
+    const discordId = req.user.discordId;
+    const ctx = buildUserActivityContext(discordId);
+    if (!def.check(ctx)) {
+      return res.status(400).json({
+        error: 'Achievement not earned',
+        debug: {
+          achievement: id,
+          uploadsCount: ctx.uploadsCount,
+          chatMessagesCount: ctx.chatMessagesCount,
+        }
+      });
+    }
+
+    // Load signer from env
+    let pk = process.env.ACHIEVEMENTS_SIGNER_PRIVATE_KEY;
+    if (!pk && fs.existsSync(SIGNER_KEY_FILE)) {
+      pk = fs.readFileSync(SIGNER_KEY_FILE, 'utf8').trim();
+    }
+    if (!pk) return res.status(500).json({ error: 'Server signer not configured' });
+
+    // Determine contract address
+    const contractAddress = process.env.ACHIEVEMENTS_CONTRACT_ADDRESS || (fs.existsSync(CONTRACT_ADDRESS_FILE) ? fs.readFileSync(CONTRACT_ADDRESS_FILE, 'utf8').trim() : null);
+    if (!contractAddress) return res.status(500).json({ error: 'Contract address not configured' });
+
+    const to = req.user.walletAddress;
+    if (!to) return res.status(400).json({ error: 'Wallet not linked' });
+
+    const deadline = Math.floor(Date.now() / 1000) + 10 * 60; // 10 minutes
+    // Use a simple per-request random nonce to avoid replay; contract tracks nonces by address
+    const nonceHex = Ethers.hexlify(Ethers.randomBytes(32));
+
+    const signer = new Ethers.Wallet(pk);
+    const chainId = 10143; // Monad Testnet
+    const domain = {
+      name: 'the capsule honor badges',
+      version: '1',
+      chainId,
+      verifyingContract: contractAddress,
+    };
+    const types = {
+      MintPermit: [
+        { name: 'to', type: 'address' },
+        { name: 'id', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' },
+      ],
+    };
+    const value = { to, id: achievementIdFromKey(id), deadline, nonce: nonceHex };
+    const signature = await signer.signTypedData(domain, types, value);
+
+    return res.json({
+      to,
+      id: achievementIdFromKey(id),
+      deadline,
+      nonce: nonceHex,
+      signature,
+      contractAddress,
+    });
+  } catch (e) {
+    console.error('permit error', e);
+    return res.status(500).json({ error: 'Failed to issue permit' });
+  }
+});
+
+// Map backend achievement key to on-chain numeric id
+function achievementIdFromKey(key) {
+  switch (key) {
+    case 'first-login': return 1;
+    case 'first-chat': return 2;
+    case 'chatter-10': return 3;
+    case 'uploader': return 4;
+    case 'gallery-contributor-5': return 5;
+    default: return 0;
+  }
+}
+
+// Record a minted achievement for the current user, preventing duplicates
+app.post('/api/achievements/:id/minted', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const id = req.params.id;
+    const def = ACHIEVEMENTS.find(a => a.id === id);
+    if (!def) return res.status(404).json({ error: 'Achievement not found' });
+    const discordId = req.user.discordId;
+    const ctx = buildUserActivityContext(discordId);
+    if (!def.check(ctx)) return res.status(400).json({ error: 'Achievement not earned' });
+
+    const { txHash } = req.body || {};
+    if (!txHash || typeof txHash !== 'string') return res.status(400).json({ error: 'Missing txHash' });
+
+    const records = readMintedAchievements();
+    const already = records.find(r => r.discordId === discordId && r.achievementId === id);
+    if (already) return res.status(200).json({ ok: true, already: true });
+
+    records.push({
+      discordId,
+      achievementId: id,
+      txHash,
+      mintedAt: new Date().toISOString(),
+    });
+    if (!writeMintedAchievements(records)) return res.status(500).json({ error: 'Failed to save' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to record minted achievement' });
   }
 });
 
