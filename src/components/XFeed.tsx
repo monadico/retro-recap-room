@@ -22,19 +22,15 @@ interface XPost {
   authorName?: string;
   authorUrl?: string;
   timestamp: string;
+  submittedBy?: {
+    discordId: string;
+    username: string;
+    avatar?: string | null;
+  };
 }
 
 const XFeed: React.FC = () => {
-  const [posts, setPosts] = useState<XPost[]>([
-    {
-      id: '1',
-      url: 'https://x.com/community_event/status/123456789',
-      embedHtml: '<div class="placeholder-post">Sample post - Add real X posts to see embedded content!</div>',
-      authorName: 'Community Event',
-      authorUrl: 'https://x.com/community_event',
-      timestamp: '2024-01-15T10:30:00.000Z'
-    }
-  ]);
+  const [posts, setPosts] = useState<XPost[]>([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [postUrl, setPostUrl] = useState('');
@@ -62,7 +58,8 @@ const XFeed: React.FC = () => {
   const fetchXEmbed = async (url: string) => {
     try {
       // Use our backend as a proxy to avoid CORS issues
-      const response = await fetch('http://localhost:3001/api/xposts/oembed', {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      const response = await fetch(`${apiBase}/api/xposts/oembed`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,17 +97,22 @@ const XFeed: React.FC = () => {
     
     try {
       const embedData = await fetchXEmbed(postUrl);
-      
-      const post: XPost = {
-        id: Date.now().toString(),
-        url: postUrl,
-        embedHtml: embedData.html,
-        authorName: embedData.authorName,
-        authorUrl: embedData.authorUrl,
-        timestamp: new Date().toISOString()
-      };
 
-      setPosts(prev => [post, ...prev]);
+      // Persist to backend
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      const submitRes = await fetch(`${apiBase}/api/xposts/save`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: postUrl,
+          embedHtml: embedData.html,
+        })
+      });
+      const saved = await submitRes.json();
+      if (!submitRes.ok) throw new Error(saved?.error || 'Failed to save post');
+
+      setPosts(prev => [saved, ...prev]);
       setPostUrl('');
       setShowAddForm(false);
       
@@ -140,6 +142,22 @@ const XFeed: React.FC = () => {
     if (diffInDays < 7) return `${diffInDays}d`;
     return date.toLocaleDateString();
   };
+
+  // Load persisted posts once
+  useEffect(() => {
+    (async () => {
+      try {
+        const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+        const res = await fetch(`${apiBase}/api/xposts`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setPosts(data || []);
+          setTimeout(processXEmbeds, 100);
+        }
+      } catch {}
+    })();
+    // run once on mount
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-[hsl(var(--background))]">
@@ -203,7 +221,10 @@ const XFeed: React.FC = () => {
             <div key={post.id} className="retro-panel p-3 bg-[hsl(var(--card))] border-2" style={{ borderStyle: 'inset' }}>
               {/* Post Header */}
               <div className="flex items-start space-x-2 mb-2">
-                <div className="flex-1">
+                <div className="flex-1 flex items-center gap-2">
+                  {post.submittedBy?.avatar && (
+                    <img src={post.submittedBy.avatar} alt="pfp" className="w-5 h-5 rounded-full" />
+                  )}
                   <div className="flex items-center space-x-1">
                     {post.authorName && (
                       <span className="text-xs font-bold text-[hsl(var(--foreground))]">

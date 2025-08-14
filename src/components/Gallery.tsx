@@ -24,8 +24,8 @@ interface Photo {
 }
 
 // API base URL - change this to your VPS URL when deploying
-const API_BASE_URL = 'http://localhost:3001/api';
-const BACKEND_BASE_URL = 'http://localhost:3001';
+const API_BASE_URL = `${(import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001'}/api`;
+const BACKEND_BASE_URL = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
 
 // API functions
 const fetchPhotos = async (): Promise<Photo[]> => {
@@ -80,7 +80,7 @@ const Gallery: React.FC = () => {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await fetch('http://localhost:3001/auth/user', {
+        const response = await fetch(`${BACKEND_BASE_URL}/auth/user`, {
           credentials: 'include'
         });
         
@@ -91,7 +91,7 @@ const Gallery: React.FC = () => {
           setUsername(userData.username || 'Anonymous');
           
           // Check upload permissions
-          const permissionsResponse = await fetch('http://localhost:3001/api/upload-permissions', {
+          const permissionsResponse = await fetch(`${BACKEND_BASE_URL}/api/upload-permissions`, {
             credentials: 'include'
           });
           

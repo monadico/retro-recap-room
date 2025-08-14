@@ -8,7 +8,6 @@ const session = require('express-session');
 const FileStoreFactory = require('session-file-store');
 const passport = require('passport');
 const WebSocket = require('ws');
-const { ethers: Ethers } = require('ethers');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,7 +34,15 @@ app.use((req, res, next) => {
   return next();
 });
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'uploads')));
+
+// Data directory (mount this as a volume in production)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Serve uploads from data directory
+app.use(express.static(UPLOADS_DIR));
 
 // Session middleware
 const FileStore = FileStoreFactory(session);
@@ -129,7 +136,7 @@ app.use('/auth', require('./routes/auth')(passport));
 // Specific route for serving uploaded images and videos
 app.get('/uploads/:filename', (req, res) => {
   const filename = req.params.filename;
-  const filePath = path.join(__dirname, 'uploads', filename);
+  const filePath = path.join(UPLOADS_DIR, filename);
   
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
@@ -141,7 +148,7 @@ app.get('/uploads/:filename', (req, res) => {
 // Configure multer for image and video uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/')
+    cb(null, UPLOADS_DIR)
   },
   filename: function (req, file, cb) {
     // Generate unique filename with timestamp
@@ -166,15 +173,19 @@ const upload = multer({
 });
 
 // Data file paths for storing metadata
-const PHOTOS_DATA_FILE = path.join(__dirname, 'photos-data.json');
-const VIDEOS_DATA_FILE = path.join(__dirname, 'videos-data.json');
-const XPOSTS_DATA_FILE = path.join(__dirname, 'xposts-data.json');
-const UPLOAD_WHITELIST_FILE = path.join(__dirname, 'upload-whitelist.json');
-const MIXTAPES_STATE_FILE = path.join(__dirname, 'mixtapes-state.json');
-const CHAT_DATA_FILE = path.join(__dirname, 'chat-data.json');
-const ACHIEVEMENTS_MINTED_FILE = path.join(__dirname, 'achievements-minted.json');
-const CONTRACT_ADDRESS_FILE = path.join(__dirname, 'nft-contract-address.txt');
-const SIGNER_KEY_FILE = path.join(__dirname, 'achievements-signer.key');
+const PHOTOS_DATA_FILE = path.join(DATA_DIR, 'photos-data.json');
+const VIDEOS_DATA_FILE = path.join(DATA_DIR, 'videos-data.json');
+const XPOSTS_DATA_FILE = path.join(DATA_DIR, 'xposts-data.json');
+const UPLOAD_WHITELIST_FILE = path.join(DATA_DIR, 'upload-whitelist.json');
+const MIXTAPES_STATE_FILE = path.join(DATA_DIR, 'mixtapes-state.json');
+const CHAT_DATA_FILE = path.join(DATA_DIR, 'chat-data.json');
+const CANVA_STATE_FILE = path.join(DATA_DIR, 'canva-state.json');
+const CANVA_CONTRACT_ADDRESS_FILE = path.join(DATA_DIR, 'canva-contract-address.txt');
+const CANVA_TESTER_IDS = String(process.env.CANVA_TESTER_IDS || '348265632770424832')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+// Old achievements/NFT files removed
 
 // Initialize data files if they don't exist
 if (!fs.existsSync(PHOTOS_DATA_FILE)) {
@@ -205,9 +216,15 @@ if (!fs.existsSync(CHAT_DATA_FILE)) {
     users: []
   }, null, 2));
 }
-if (!fs.existsSync(ACHIEVEMENTS_MINTED_FILE)) {
-  fs.writeFileSync(ACHIEVEMENTS_MINTED_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(CANVA_STATE_FILE)) {
+  fs.writeFileSync(CANVA_STATE_FILE, JSON.stringify({
+    width: 20,
+    height: 12,
+    placements: [],
+    nextTokenId: 1
+  }, null, 2));
 }
+// Removed achievements minted file init
 
 // Helper to read users data
 function readUsersData() {
@@ -341,23 +358,34 @@ function writeChatData(data) {
   }
 }
 
-// Minted achievements persistence
-function readMintedAchievements() {
+// Canva state helpers
+function readCanvaState() {
   try {
-    const data = fs.readFileSync(ACHIEVEMENTS_MINTED_FILE, 'utf8');
+    const data = fs.readFileSync(CANVA_STATE_FILE, 'utf8');
     return JSON.parse(data);
   } catch (e) {
-    return [];
+    return { width: 20, height: 12, placements: [], nextTokenId: 1 };
   }
 }
-function writeMintedAchievements(records) {
+function writeCanvaState(state) {
   try {
-    fs.writeFileSync(ACHIEVEMENTS_MINTED_FILE, JSON.stringify(records, null, 2));
+    fs.writeFileSync(CANVA_STATE_FILE, JSON.stringify(state, null, 2));
     return true;
   } catch (e) {
     return false;
   }
 }
+
+function isCanvaTester(req) {
+  try {
+    const id = req?.user?.discordId;
+    return !!id && CANVA_TESTER_IDS.includes(String(id));
+  } catch (_) {
+    return false;
+  }
+}
+
+// Removed achievements persistence and bypass wallet helpers
 
 // Middleware to check authentication and upload permissions
 function requireUploadPermission(req, res, next) {
@@ -398,6 +426,231 @@ app.post('/api/mixtapes/state', (req, res) => {
     return res.status(400).json({ success: false, error: 'invalid payload' });
   }
 });
+
+// Return current contract address used for minting
+app.get('/api/canva/contract-address', (_req, res) => {
+  try {
+    const fromEnv = process.env.CANVA_CONTRACT_ADDRESS;
+    const fromFile = fs.existsSync(CANVA_CONTRACT_ADDRESS_FILE)
+      ? fs.readFileSync(CANVA_CONTRACT_ADDRESS_FILE, 'utf8').trim()
+      : null;
+    const addr = fromEnv || fromFile || null;
+    if (!addr) return res.status(404).json({ error: 'Contract address not configured' });
+    res.json({ address: addr });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to read contract address' });
+  }
+});
+
+// Allocate a tokenId for minting and return contract address
+app.post('/api/canva/mint-params', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const fromEnv = process.env.CANVA_CONTRACT_ADDRESS;
+    const fromFile = fs.existsSync(CANVA_CONTRACT_ADDRESS_FILE)
+      ? fs.readFileSync(CANVA_CONTRACT_ADDRESS_FILE, 'utf8').trim()
+      : null;
+    const address = fromEnv || fromFile || null;
+    if (!address) return res.status(500).json({ error: 'Contract address not configured' });
+
+    const state = readCanvaState();
+    const tokenId = Number.isInteger(state.nextTokenId) ? state.nextTokenId : 1;
+    state.nextTokenId = tokenId + 1;
+    if (!writeCanvaState(state)) return res.status(500).json({ error: 'Failed to allocate token id' });
+    res.json({ address, tokenId });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to build mint params' });
+  }
+});
+
+// Canva API
+// Get current canva state
+app.get('/api/canva/state', (req, res) => {
+  try {
+    const state = readCanvaState();
+    res.json(state);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to read canva state' });
+  }
+});
+
+// Place the current user's PFP onto the canva at x,y with optional message
+app.post('/api/canva/place', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { x, y, message } = req.body || {};
+    const state = readCanvaState();
+    const xi = Number(x), yi = Number(y);
+    if (!Number.isInteger(xi) || !Number.isInteger(yi)) {
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    }
+    if (xi < 0 || yi < 0 || xi >= state.width || yi >= state.height) {
+      return res.status(400).json({ error: 'Out of bounds' });
+    }
+    const msg = typeof message === 'string' ? message.trim().slice(0, 140) : '';
+    const already = state.placements.find(p => p.x === xi && p.y === yi);
+
+    const userId = req.user.discordId;
+    const tester = isCanvaTester(req);
+    const userExistingIndex = state.placements.findIndex(p => p.discordId === userId);
+    if (userExistingIndex !== -1 && !tester) {
+      return res.status(400).json({ error: 'You already have a placement' });
+    }
+    if (already) return res.status(400).json({ error: 'Slot already taken' });
+
+    // Build Discord avatar URL if available
+    const avatarHash = req.user.avatar;
+    const avatarUrl = (avatarHash && req.user.discordId)
+      ? `https://cdn.discordapp.com/avatars/${req.user.discordId}/${avatarHash}.png`
+      : null;
+    const username = req.user.username;
+    if (tester && userExistingIndex !== -1) {
+      state.placements[userExistingIndex] = {
+        ...state.placements[userExistingIndex],
+        x: xi,
+        y: yi,
+        username,
+        avatarUrl,
+        message: msg,
+        placedAt: new Date().toISOString(),
+      };
+    } else {
+      state.placements.push({
+        x: xi,
+        y: yi,
+        discordId: userId,
+        username,
+        avatarUrl,
+        message: msg,
+        placedAt: new Date().toISOString(),
+      });
+    }
+    if (!writeCanvaState(state)) return res.status(500).json({ error: 'Failed to save placement' });
+    res.json({ ok: true, state });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to place on canva' });
+  }
+});
+
+// Validate if current user can place at x,y (no mutation)
+app.post('/api/canva/can-place', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { x, y } = req.body || {};
+    const state = readCanvaState();
+    const xi = Number(x), yi = Number(y);
+    if (!Number.isInteger(xi) || !Number.isInteger(yi)) {
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    }
+    if (xi < 0 || yi < 0 || xi >= state.width || yi >= state.height) {
+      return res.status(400).json({ error: 'Out of bounds' });
+    }
+    const already = state.placements.find(p => p.x === xi && p.y === yi);
+    if (already) return res.status(400).json({ error: 'Slot already taken' });
+    const userExisting = state.placements.find(p => p.discordId === req.user.discordId);
+    if (userExisting) return res.status(400).json({ error: 'You already have a placement' });
+    return res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to validate placement' });
+  }
+});
+
+// Return dynamic metadata for the shared NFT
+app.get('/api/canva/metadata', (req, res) => {
+  try {
+    const state = readCanvaState();
+    const host = `${req.protocol}://${req.get('host')}`;
+    const image = `${host}/api/canva/image.svg`;
+    const name = 'The Canva';
+    const description = 'A dynamic community canvas of Discord PFPs.';
+    const attributes = [
+      { trait_type: 'width', value: state.width },
+      { trait_type: 'height', value: state.height },
+      { trait_type: 'placements', value: state.placements.length },
+    ];
+    res.json({ name, description, image, attributes });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to build metadata' });
+  }
+});
+
+// Simple SVG image composer for the canva
+app.get('/api/canva/image.svg', (req, res) => {
+  try {
+    const state = readCanvaState();
+    const cell = 32; // px per cell
+    const padding = 8;
+    const w = padding * 2 + state.width * cell;
+    const h = padding * 2 + state.height * cell;
+    const rects = [];
+    // background grid
+    for (let yy = 0; yy < state.height; yy++) {
+      for (let xx = 0; xx < state.width; xx++) {
+        const x = padding + xx * cell;
+        const y = padding + yy * cell;
+        rects.push(`<rect x="${x}" y="${y}" width="${cell - 1}" height="${cell - 1}" fill="#0f172a" stroke="#1f2a44" stroke-width="1"/>`);
+      }
+    }
+    // placements: render user avatar images; fallback to colored blocks with initials
+    const placements = [];
+    for (const p of state.placements) {
+      const x = padding + p.x * cell;
+      const y = padding + p.y * cell;
+      const color = `hsl(${Math.abs(hashCode(p.discordId)) % 360} 70% 45%)`;
+      const initials = (p.username || 'U').slice(0, 2).toUpperCase();
+      const title = p.message ? `${p.username}: ${p.message}` : p.username;
+      if (p.avatarUrl) {
+        placements.push(
+          `<g>
+  <title>${escapeXml(title || '')}</title>
+  <rect x="${x}" y="${y}" rx="4" ry="4" width="${cell - 2}" height="${cell - 2}" fill="#0b1020"/>
+  <image href="${escapeXml(p.avatarUrl)}" x="${x}" y="${y}" width="${cell - 2}" height="${cell - 2}" preserveAspectRatio="xMidYMid slice"/>
+</g>`
+        );
+      } else {
+        placements.push(
+          `<g>
+  <title>${escapeXml(title || '')}</title>
+  <rect x="${x}" y="${y}" rx="4" ry="4" width="${cell - 2}" height="${cell - 2}" fill="${color}"/>
+  <text x="${x + cell / 2}" y="${y + cell / 2 + 4}" text-anchor="middle" fill="#ffffff" font-size="12" font-family="monospace">${escapeXml(initials)}</text>
+</g>`
+        );
+      }
+    }
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <rect x="0" y="0" width="100%" height="100%" fill="#0b1020"/>
+  ${rects.join('\n  ')}
+  ${placements.join('\n  ')}
+</svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
+    return res.send(svg);
+  } catch (e) {
+    return res.status(500).type('text/plain').send('error');
+  }
+});
+
+function hashCode(s) {
+  try {
+    let h = 0;
+    for (let i = 0; i < String(s).length; i++) {
+      h = ((h << 5) - h) + String(s).charCodeAt(i);
+      h |= 0;
+    }
+    return h;
+  } catch (_) {
+    return 0;
+  }
+}
+function escapeXml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+}
 
 // Video Management Endpoints
 // GET /api/videos - Get all videos
@@ -509,8 +762,8 @@ app.post('/api/photos', requireUploadPermission, upload.single('image'), (req, r
   }
 });
 
-// Achievements: compute per-user activity and map to badge definitions
-const ACHIEVEMENTS = [
+// Achievements removed
+/* const ACHIEVEMENTS = [
   {
     id: 'first-login',
     name: 'First Login',
@@ -525,9 +778,9 @@ const ACHIEVEMENTS = [
   },
   {
     id: 'chatter-10',
-    name: 'Chatter (10)',
-    description: 'Sent 10 chat messages.',
-    check: (ctx) => ctx.chatMessagesCount >= 10,
+    name: 'Chatter (50)',
+    description: 'Sent 50 chat messages.',
+    check: (ctx) => ctx.chatMessagesCount >= 50,
   },
   {
     id: 'uploader',
@@ -541,9 +794,9 @@ const ACHIEVEMENTS = [
     description: 'Uploaded 5 photos or videos.',
     check: (ctx) => ctx.uploadsCount >= 5,
   },
-];
+]; */
 
-function buildUserActivityContext(discordId) {
+/* function buildUserActivityContext(discordId) {
   const photos = readPhotosData();
   const videos = readVideosData();
   const chat = readChatData();
@@ -553,10 +806,10 @@ function buildUserActivityContext(discordId) {
   const users = readUsersData();
   const user = users.find(u => u.discordId === discordId) || null;
   return { uploadsCount, chatMessagesCount, user };
-}
+} */
 
 // Public endpoint: achievements for current user
-app.get('/api/achievements', (req, res) => {
+/* app.get('/api/achievements', (req, res) => {
   try {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -571,19 +824,23 @@ app.get('/api/achievements', (req, res) => {
     }));
     // overlay minted status
     const minted = readMintedAchievements().filter(r => r.discordId === discordId);
-    const itemsWithMint = items.map(it => ({
+    let itemsWithMint = items.map(it => ({
       ...it,
       minted: minted.some(m => m.achievementId === it.id),
       mintedTx: minted.find(m => m.achievementId === it.id)?.txHash || null,
     }));
-    res.json({ achievements: itemsWithMint });
+    const bypassActive = isBypassWallet(req);
+    if (bypassActive) {
+      itemsWithMint = itemsWithMint.map(it => ({ ...it, earned: true }));
+    }
+    res.json({ achievements: itemsWithMint, bypassActive });
   } catch (e) {
     res.status(500).json({ error: 'Failed to compute achievements' });
   }
-});
+}); */
 
 // Helper endpoint: build badge metadata for an achievement (for use as tokenURI)
-app.get('/api/achievements/:id/metadata', (req, res) => {
+/* app.get('/api/achievements/:id/metadata', (req, res) => {
   try {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -594,7 +851,7 @@ app.get('/api/achievements/:id/metadata', (req, res) => {
     const user = req.user;
     const name = `${def.name} — ${user.username}`;
     const description = def.description;
-    const image = `${req.protocol}://${req.get('host')}/uploads/retro-desktop-bg.jpg`; // placeholder
+    const image = `${req.protocol}://${req.get('host')}/api/achievements/${encodeURIComponent(id)}/image.svg`;
     const attributes = [
       { trait_type: 'achievement_id', value: def.id },
       { trait_type: 'user', value: user.username },
@@ -604,10 +861,119 @@ app.get('/api/achievements/:id/metadata', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Failed to build metadata' });
   }
-});
+}); */
+
+// ASCII art SVG generator for achievements
+/* function buildAsciiArtLines(achievementKey, username) {
+  const uname = (username || 'User').toUpperCase();
+  switch (achievementKey) {
+    case 'first-login':
+      return [
+        '+----------------------------------+',
+        '|     THE CAPSULE HONOR BADGES     |',
+        '|                                  |',
+        '|           FIRST LOGIN            |',
+        '|                                  |',
+        `|   WELCOME, ${uname.padEnd(Math.max(0, 24 - uname.length), ' ')}|`,
+        '|               [*]                |',
+        '|                                  |',
+        '+----------------------------------+',
+      ];
+    case 'first-chat':
+      return [
+        '+----------------------------------+',
+        '|        COMMUNITY CHITCHAT        |',
+        '|                                  |',
+        '|          FIRST MESSAGE           |',
+        '|                                  |',
+        '|        \\   Hello world!        |',
+        '|         \\  (…and many more)     |',
+        '|          \\                      |',
+        '+----------------------------------+',
+      ];
+    case 'chatter-10':
+      return [
+        '+----------------------------------+',
+        '|           CHATTER (10)           |',
+        '|                                  |',
+        '|   >>>>>>>>>>>>>>>>>>>>>>>>>>>>   |',
+        '|   10 MESSAGES AND COUNTING!      |',
+        '|   <<<<<<<<<<<<<<<<<<<<<<<<<<     |',
+        '|                                  |',
+        '|            KEEP TALKING          |',
+        '+----------------------------------+',
+      ];
+    case 'uploader':
+      return [
+        '+----------------------------------+',
+        '|           FIRST UPLOAD           |',
+        '|                                  |',
+        '|            [  ^  ]               |',
+        '|            [ / \\ ]              |',
+        '|            [/__\\]              |',
+        '|         YOUR MARK IS MADE        |',
+        '|                                  |',
+        '+----------------------------------+',
+      ];
+    case 'gallery-contributor-5':
+      return [
+        '+----------------------------------+',
+        '|      GALLERY CONTRIBUTOR (5)     |',
+        '|                                  |',
+        '|      [  ____  ]  [  ____  ]      |',
+        '|      [ | __ | ]  [ | __ | ]      |',
+        '|      [_|/__\|_]  [_|/__\|_]      |',
+        '|         FIVE FRAMES UP!          |',
+        '|                                  |',
+        '+----------------------------------+',
+      ];
+    default:
+      return [
+        '+--------------------------+',
+        '|      ACHIEVEMENT         |',
+        '|         UNKNOWN          |',
+        '+--------------------------+',
+      ];
+  }
+} */
+
+/* app.get('/api/achievements/:id/image.svg', (req, res) => {
+  try {
+    const id = req.params.id;
+    const def = ACHIEVEMENTS.find(a => a.id === id);
+    if (!def) return res.status(404).type('text/plain').send('Not found');
+    const username = req.user?.username || 'User';
+    const lines = buildAsciiArtLines(id, username);
+    const width = 512;
+    const height = 512;
+    const fontSize = 16;
+    const lineHeight = 20;
+    const startY = 120;
+    const startX = 64;
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1020"/>
+      <stop offset="100%" stop-color="#1e2a4a"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="100%" height="100%" fill="url(#bg)"/>
+  <g font-family="'Courier New', monospace" font-size="${fontSize}" fill="#cde3ff">
+    ${lines.map((line, i) => `<text x="${startX}" y="${startY + i * lineHeight}">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`).join('\n    ')}
+  </g>
+  <text x="16" y="32" fill="#8fb3ff" font-family="'Courier New', monospace" font-size="18">${def.name}</text>
+  <text x="16" y="56" fill="#6fa3ff" font-family="'Courier New', monospace" font-size="12">the capsule honor badges</text>
+</svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
+    return res.send(svg);
+  } catch (e) {
+    return res.status(500).type('text/plain').send('error');
+  }
+}); */
 
 // Issue an EIP-712 permit for minting an earned achievement
-app.post('/api/achievements/:id/permit', express.json(), async (req, res) => {
+/* app.post('/api/achievements/:id/permit', express.json(), async (req, res) => {
   try {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -618,7 +984,7 @@ app.post('/api/achievements/:id/permit', express.json(), async (req, res) => {
 
     const discordId = req.user.discordId;
     const ctx = buildUserActivityContext(discordId);
-    if (!def.check(ctx)) {
+    if (!def.check(ctx) && !isBypassWallet(req)) {
       return res.status(400).json({
         error: 'Achievement not earned',
         debug: {
@@ -678,10 +1044,10 @@ app.post('/api/achievements/:id/permit', express.json(), async (req, res) => {
     console.error('permit error', e);
     return res.status(500).json({ error: 'Failed to issue permit' });
   }
-});
+}); */
 
 // Map backend achievement key to on-chain numeric id
-function achievementIdFromKey(key) {
+/* function achievementIdFromKey(key) {
   switch (key) {
     case 'first-login': return 1;
     case 'first-chat': return 2;
@@ -690,10 +1056,10 @@ function achievementIdFromKey(key) {
     case 'gallery-contributor-5': return 5;
     default: return 0;
   }
-}
+} */
 
 // Record a minted achievement for the current user, preventing duplicates
-app.post('/api/achievements/:id/minted', (req, res) => {
+/* app.post('/api/achievements/:id/minted', (req, res) => {
   try {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -703,7 +1069,7 @@ app.post('/api/achievements/:id/minted', (req, res) => {
     if (!def) return res.status(404).json({ error: 'Achievement not found' });
     const discordId = req.user.discordId;
     const ctx = buildUserActivityContext(discordId);
-    if (!def.check(ctx)) return res.status(400).json({ error: 'Achievement not earned' });
+    if (!def.check(ctx) && !isBypassWallet(req)) return res.status(400).json({ error: 'Achievement not earned' });
 
     const { txHash } = req.body || {};
     if (!txHash || typeof txHash !== 'string') return res.status(400).json({ error: 'Missing txHash' });
@@ -723,7 +1089,7 @@ app.post('/api/achievements/:id/minted', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Failed to record minted achievement' });
   }
-});
+}); */
 
 // POST /api/photos/:id/like - Toggle like on a photo
 app.post('/api/photos/:id/like', (req, res) => {
@@ -833,6 +1199,41 @@ app.get('/api/xposts', (req, res) => {
     res.json(posts);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch X posts' });
+  }
+});
+
+// Save X post with submitter identity and embed HTML
+app.post('/api/xposts/save', (req, res) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { url, embedHtml } = req.body || {};
+    if (!url || !embedHtml) return res.status(400).json({ error: 'url and embedHtml required' });
+
+    const avatarHash = req.user.avatar;
+    const avatarUrl = (avatarHash && req.user.discordId)
+      ? `https://cdn.discordapp.com/avatars/${req.user.discordId}/${avatarHash}.png`
+      : null;
+    const post = {
+      id: Date.now().toString(),
+      url,
+      embedHtml,
+      authorName: undefined,
+      authorUrl: undefined,
+      timestamp: new Date().toISOString(),
+      submittedBy: {
+        discordId: req.user.discordId,
+        username: req.user.username,
+        avatar: avatarUrl,
+      },
+    };
+    const posts = readXPostsData();
+    posts.unshift(post);
+    if (!writeXPostsData(posts)) return res.status(500).json({ error: 'Failed to save X post' });
+    res.status(201).json(post);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save X post' });
   }
 });
 

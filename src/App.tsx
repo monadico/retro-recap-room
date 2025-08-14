@@ -32,10 +32,21 @@ export const MONAD_TESTNET = defineChain({
   testnet: true,
 });
 
+export const LOCALHOST = defineChain({
+  id: 31337,
+  name: "Localhost",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["http://127.0.0.1:8545"] },
+    public: { http: ["http://127.0.0.1:8545"] },
+  },
+  testnet: true,
+});
+
 const wagmiConfig = getDefaultConfig({
   appName: "Retro Recap Room",
   projectId: PROJECT_ID,
-  chains: [MONAD_TESTNET],
+  chains: [MONAD_TESTNET, LOCALHOST],
   ssr: false,
 });
 

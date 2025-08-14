@@ -1,24 +1,20 @@
 {
-  "name": "retro-recap-contracts",
-  "version": "1.0.0",
+  "name": "the-canva-contracts",
+  "version": "0.1.0",
   "private": true,
-  "license": "MIT",
   "scripts": {
     "build": "hardhat compile",
-    "clean": "hardhat clean",
-    "test": "hardhat test",
     "deploy": "hardhat run scripts/deploy.ts --network localhost"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "@openzeppelin/contracts": "^5.0.2",
-    "@openzeppelin/contracts-upgradeable": "^5.0.2",
-    "@openzeppelin/hardhat-upgrades": "^3.1.0",
-    "dotenv": "^16.4.5",
-    "ethers": "^6.12.1",
-    "hardhat": "^2.22.10",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@types/node": "^18.19.0",
+    "hardhat": "^2.22.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.3"
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.6"
   }
 }
 

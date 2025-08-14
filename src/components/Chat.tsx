@@ -36,7 +36,8 @@ const ChatComponent: React.FC = () => {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await fetch('http://localhost:3001/auth/user', {
+        const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+        const response = await fetch(`${apiBase}/auth/user`, {
           credentials: 'include'
         });
         

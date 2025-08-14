@@ -70,7 +70,8 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       console.log('Checking authentication status...');
       console.log('Current cookies:', document.cookie);
       
-      const response = await fetch('http://localhost:3001/auth/user', {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      const response = await fetch(`${apiBase}/auth/user`, {
         credentials: 'include'
       });
       
@@ -117,7 +118,8 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       setShowProfile(true);
     } else {
       // Redirect to Discord OAuth
-      window.location.href = 'http://localhost:3001/auth/discord';
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      window.location.href = `${apiBase}/auth/discord`;
     }
   };
 
@@ -153,16 +155,16 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       onClick: () => onOpenWindow('x-feed')
     },
     {
+      id: 'the-canva',
+      label: 'The Canva',
+      icon: <Image size={24} />,
+      onClick: () => onOpenWindow('the-canva')
+    },
+    {
       id: 'system',
       label: 'System',
       icon: <Settings size={24} />,
       onClick: () => onOpenWindow('system')
-    },
-    {
-      id: 'mint-nft',
-      label: 'Mint NFT',
-      icon: <Image size={24} />,
-      onClick: () => onOpenWindow('mint-nft')
     },
     {
       id: 'profile',

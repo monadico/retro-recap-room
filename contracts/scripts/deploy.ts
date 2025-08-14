@@ -1,23 +1,24 @@
-import { ethers, upgrades } from "hardhat";
+import { ethers } from "hardhat";
+import * as fs from "fs";
+import * as path from "path";
 
 async function main() {
-  const [deployer] = await ethers.getSigners();
-  console.log("Deploying with:", deployer.address);
+  const baseURI = process.env.METADATA_BASE_URI || "http://localhost:3001";
+  const TheCanva = await ethers.getContractFactory("TheCanvaNFT");
+  const canva = await TheCanva.deploy(baseURI);
+  await canva.waitForDeployment();
+  const address = await canva.getAddress();
+  console.log("TheCanvaNFT deployed:", address);
 
-  const Achievements = await ethers.getContractFactory("Achievements1155Upgradeable");
-  const name = "the capsule honor badges";
-  const symbol = "CAPSULE-HONOR";
-  const baseURI = process.env.BASE_URI || "https://example.com/achievements/";
-  const admin = process.env.ADMIN || deployer.address;
-  const signer = process.env.SIGNER || deployer.address;
-
-  const proxy = await upgrades.deployProxy(
-    Achievements,
-    [name, symbol, baseURI, admin, signer],
-    { initializer: "initialize", kind: "uups" }
-  );
-  await proxy.waitForDeployment();
-  console.log("Achievements1155 proxy:", await proxy.getAddress());
+  // Write address for backend to consume
+  try {
+    const repoRoot = path.resolve(__dirname, "..", "..");
+    const backendPath = path.join(repoRoot, "backend", "canva-contract-address.txt");
+    fs.writeFileSync(backendPath, address);
+    console.log("Wrote contract address to:", backendPath);
+  } catch (e) {
+    console.warn("Warning: failed to write backend address file:", e);
+  }
 }
 
 main().catch((e) => {

@@ -30,7 +30,8 @@ const RadioCore: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('http://localhost:3001/auth/user', { credentials: 'include' });
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      const r = await fetch(`${apiBase}/auth/user`, { credentials: 'include' });
         if (r.ok) {
           const u = await r.json();
           setUserDiscordId(u?.discordId || null);
@@ -112,7 +113,8 @@ const RadioCore: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch('http://localhost:3001/api/mixtapes/state');
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      const r = await fetch(`${apiBase}/api/mixtapes/state`);
         if (!r.ok) return;
         const s = await r.json();
         const p = playerRef.current;
@@ -147,7 +149,8 @@ const RadioCore: React.FC = () => {
       setYtState({ videoId, timeSec, paused, updatedAt: Date.now() });
       // persist to backend for continuity when sessions are empty
       try {
-        fetch('http://localhost:3001/api/mixtapes/state', {
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      fetch(`${apiBase}/api/mixtapes/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, index, updatedAt: Date.now() }),
@@ -169,7 +172,8 @@ const RadioCore: React.FC = () => {
         const ps = p.getPlayerState?.();
         const paused = ps === 2;
         const index = typeof p.getPlaylistIndex === 'function' ? (p.getPlaylistIndex() ?? 0) : 0;
-        navigator.sendBeacon?.('http://localhost:3001/api/mixtapes/state', new Blob([
+      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+      navigator.sendBeacon?.(`${apiBase}/api/mixtapes/state`, new Blob([
           JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, index, updatedAt: Date.now() })
         ], { type: 'application/json' }));
       } catch {}

@@ -34,14 +34,15 @@ const PoolTV: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const u = await fetch('http://localhost:3001/auth/user', { credentials: 'include' });
+    const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+    const u = await fetch(`${apiBase}/auth/user`, { credentials: 'include' });
         if (u.ok) {
           const data = await u.json();
           setUser({ discordId: data.discordId, username: data.username });
         } else {
           setUser(null);
         }
-        const p = await fetch('http://localhost:3001/api/upload-permissions', { credentials: 'include' });
+    const p = await fetch(`${apiBase}/api/upload-permissions`, { credentials: 'include' });
         if (p.ok) {
           const pdata = await p.json();
           setCanUpload(!!pdata.canUpload);
@@ -57,7 +58,8 @@ const PoolTV: React.FC = () => {
   }, []);
 
   const fetchVideos = async () => {
-    const res = await fetch('http://localhost:3001/api/videos');
+  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+  const res = await fetch(`${apiBase}/api/videos`);
     if (res.ok) {
       const list: VideoItem[] = await res.json();
       setVideos(list);
@@ -121,7 +123,8 @@ const PoolTV: React.FC = () => {
     form.append('video', file);
     if (title) form.append('title', title);
     if (description) form.append('description', description);
-    const res = await fetch('http://localhost:3001/api/videos', {
+  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+  const res = await fetch(`${apiBase}/api/videos`, {
       method: 'POST',
       credentials: 'include',
       body: form,
@@ -139,7 +142,8 @@ const PoolTV: React.FC = () => {
   };
 
   const deleteVideo = async (id: string) => {
-    const res = await fetch(`http://localhost:3001/api/videos/${id}`, {
+  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+  const res = await fetch(`${apiBase}/api/videos/${id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
@@ -195,7 +199,7 @@ const PoolTV: React.FC = () => {
               className="w-full h-full object-contain"
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
-              src={`http://localhost:3001${currentVideo.url}`}
+              src={`${(import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001'}${currentVideo.url}`}
               controls={false}
             />
           ) : (
