@@ -6,7 +6,7 @@
 # - Multi-stage build: build with Node.js, serve with nginx
 
 # Build stage
-FROM node:18-bookworm-slim AS builder
+FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Copy package files
@@ -21,7 +21,7 @@ COPY postcss.config.js ./
 COPY components.json ./
 
 # Install dependencies and build
-RUN npm ci
+RUN npm install --production=false --prefer-offline --no-audit
 RUN npm run build
 
 # Production stage
