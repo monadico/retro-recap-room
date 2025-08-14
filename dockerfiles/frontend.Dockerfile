@@ -15,9 +15,10 @@ COPY src/ ./src/
 COPY public/ ./public/
 COPY index.html ./
 COPY vite.config.ts ./
-COPY tsconfig.json ./
-COPY tailwind.config.js ./
+COPY tsconfig*.json ./
+COPY tailwind.config.ts ./
 COPY postcss.config.js ./
+COPY components.json ./
 
 # Install dependencies and build
 RUN npm ci
