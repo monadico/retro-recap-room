@@ -32,6 +32,10 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY dockerfiles/nginx.conf /etc/nginx/nginx.conf
+# Remove default nginx config
+RUN rm -f /etc/nginx/conf.d/default.conf
+# Verify nginx config
+RUN nginx -t
 
 # Expose port 80
 EXPOSE 80
