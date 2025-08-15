@@ -4,7 +4,6 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Brush, Eraser, Download, Upload, Save, Undo, Redo, Palette } from 'lucide-react';
 import { config } from '../config/environment';
 
 interface CanvaStatePlacement {
@@ -42,11 +41,10 @@ const TheCanva: React.FC = () => {
   useEffect(() => {
     const loadCanvasState = async () => {
       try {
-        const response = await fetch(`${config.apiBase}/api/canvas/state`);
+        const response = await fetch(`${config.apiBase}/api/canva/state`);
         if (response.ok) {
           const data = await response.json();
-          // Apply the loaded state to the canvas
-          // This would depend on your canvas implementation
+          setState(data);
         }
       } catch (error) {
         console.error('Error loading canvas state:', error);
@@ -56,32 +54,8 @@ const TheCanva: React.FC = () => {
     loadCanvasState();
   }, []);
 
-  const handleSave = async () => {
-    try {
-      const canvasData = canvasRef.current?.toDataURL();
-      if (!canvasData) return;
-
-      const response = await fetch(`${config.apiBase}/api/canvas/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ canvasData }),
-      });
-
-      if (response.ok) {
-        setMessage('Canvas saved successfully!');
-        setTimeout(() => setMessage(''), 3000);
-      } else {
-        setMessage('Failed to save canvas');
-        setTimeout(() => setMessage(''), 3000);
-      }
-    } catch (error) {
-      console.error('Error saving canvas:', error);
-      setMessage('Error saving canvas');
-      setTimeout(() => setMessage(''), 3000);
-    }
-  };
+  // Remove the handleSave function since it's not supported by the API
+  // The canvas works with placements, not drawing data
 
   const isTaken = useMemo(() => {
     const set = new Set(state?.placements.map(p => `${p.x},${p.y}`) || []);

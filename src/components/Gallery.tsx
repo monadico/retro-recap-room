@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Camera, Upload, Download, Trash2, Heart, MessageCircle, Share2 } from 'lucide-react';
+import { Camera, Upload, Download, Trash2, Heart, MessageCircle, Share2, Lock, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { config } from '../config/environment';
 

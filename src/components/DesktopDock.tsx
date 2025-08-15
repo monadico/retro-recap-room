@@ -103,20 +103,9 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
   }, [showProfile]);
 
   const handleLogin = async () => {
-    try {
-      const response = await fetch(`${config.apiBase}/auth/discord`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        window.location.href = data.authUrl;
-      } else {
-        console.error('Failed to get auth URL');
-      }
-    } catch (error) {
-      console.error('Error during login:', error);
-    }
+    // For Discord OAuth, directly redirect the browser window
+    // This avoids CORS issues with Discord's OAuth endpoint
+    window.location.href = `${config.apiBase}/auth/discord`;
   };
 
   const handleLogout = async () => {
