@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ReactTogether, useStateTogether } from 'react-together';
+import { config } from '../config/environment';
 
 // Minimal synchronized audio "radio" prototype using a public domain/CC audio stream placeholder.
 // We synchronize just two fields across clients: currentTrackIndex and startedAtUtc.
@@ -30,8 +31,7 @@ const RadioCore: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      const r = await fetch(`${apiBase}/auth/user`, { credentials: 'include' });
+        const r = await fetch(`${config.apiBase}/auth/user`, { credentials: 'include' });
         if (r.ok) {
           const u = await r.json();
           setUserDiscordId(u?.discordId || null);
@@ -113,8 +113,7 @@ const RadioCore: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      const r = await fetch(`${apiBase}/api/mixtapes/state`);
+      const r = await fetch(`${config.apiBase}/api/mixtapes/state`);
         if (!r.ok) return;
         const s = await r.json();
         const p = playerRef.current;
@@ -149,8 +148,7 @@ const RadioCore: React.FC = () => {
       setYtState({ videoId, timeSec, paused, updatedAt: Date.now() });
       // persist to backend for continuity when sessions are empty
       try {
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      fetch(`${apiBase}/api/mixtapes/state`, {
+        fetch(`${config.apiBase}/api/mixtapes/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, index, updatedAt: Date.now() }),
@@ -172,8 +170,8 @@ const RadioCore: React.FC = () => {
         const ps = p.getPlayerState?.();
         const paused = ps === 2;
         const index = typeof p.getPlaylistIndex === 'function' ? (p.getPlaylistIndex() ?? 0) : 0;
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      navigator.sendBeacon?.(`${apiBase}/api/mixtapes/state`, new Blob([
+        
+        navigator.sendBeacon?.(`${config.apiBase}/api/mixtapes/state`, new Blob([
           JSON.stringify({ playlistId: PLAYLIST_ID, videoId, timeSec, paused, index, updatedAt: Date.now() })
         ], { type: 'application/json' }));
       } catch {}
@@ -204,6 +202,63 @@ const RadioCore: React.FC = () => {
       if (!ytState.paused && typeof p.playVideo === 'function') p.playVideo();
     } catch {}
   }, [ytState, isController]);
+
+  const handlePlayPause = async () => {
+    if (!isController) return;
+    
+    try {
+      const response = await fetch(`${config.apiBase}/api/yt/play-pause`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: ytState.paused ? 'play' : 'pause' })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setYtState(prev => ({ ...prev, ...data }));
+      }
+    } catch (error) {
+      console.error('Error controlling playback:', error);
+    }
+  };
+
+  const handleSeek = async (timeSec: number) => {
+    if (!isController) return;
+    
+    try {
+      const response = await fetch(`${config.apiBase}/api/yt/seek`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeSec })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setYtState(prev => ({ ...prev, ...data }));
+      }
+    } catch (error) {
+      console.error('Error seeking:', error);
+    }
+  };
+
+  const handleVideoChange = async (videoId: string) => {
+    if (!isController) return;
+    
+    try {
+      const response = await fetch(`${config.apiBase}/api/yt/change-video`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setYtState(prev => ({ ...prev, ...data }));
+      }
+    } catch (error) {
+      console.error('Error changing video:', error);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">

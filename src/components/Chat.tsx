@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Send, User } from 'lucide-react';
+import { config } from '../config/environment';
 
 interface ChatMessage {
   id: string;
@@ -36,8 +37,7 @@ const ChatComponent: React.FC = () => {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-        const response = await fetch(`${apiBase}/auth/user`, {
+        const response = await fetch(`${config.apiBase}/auth/user`, {
           credentials: 'include'
         });
         
@@ -61,7 +61,7 @@ const ChatComponent: React.FC = () => {
     if (!user) return;
 
     const connectWebSocket = () => {
-      const ws = new WebSocket('ws://localhost:3001');
+      const ws = new WebSocket(config.ws.url);
       wsRef.current = ws;
 
       ws.onopen = () => {

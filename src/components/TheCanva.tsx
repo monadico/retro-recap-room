@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAccount, useWriteContract, useChainId, useSwitchChain } from 'wagmi';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Brush, Eraser, Download, Upload, Save, Undo, Redo, Palette } from 'lucide-react';
+import { config } from '../config/environment';
 
 interface CanvaStatePlacement {
   x: number;
@@ -32,16 +38,50 @@ const TheCanva: React.FC = () => {
   const EXPECTED_CHAIN_ID = 10143; // Monad Testnet
   const onWrongNetwork = isConnected && chainId !== EXPECTED_CHAIN_ID;
 
-  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+  // Load canvas state on component mount
+  useEffect(() => {
+    const loadCanvasState = async () => {
+      try {
+        const response = await fetch(`${config.apiBase}/api/canvas/state`);
+        if (response.ok) {
+          const data = await response.json();
+          // Apply the loaded state to the canvas
+          // This would depend on your canvas implementation
+        }
+      } catch (error) {
+        console.error('Error loading canvas state:', error);
+      }
+    };
 
-  const load = async () => {
+    loadCanvasState();
+  }, []);
+
+  const handleSave = async () => {
     try {
-      const res = await fetch(`${apiBase}/api/canva/state`, { credentials: 'include' });
-      if (res.ok) setState(await res.json());
-    } catch (_) {}
-  };
+      const canvasData = canvasRef.current?.toDataURL();
+      if (!canvasData) return;
 
-  useEffect(() => { load(); }, []);
+      const response = await fetch(`${config.apiBase}/api/canvas/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ canvasData }),
+      });
+
+      if (response.ok) {
+        setMessage('Canvas saved successfully!');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Failed to save canvas');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error saving canvas:', error);
+      setMessage('Error saving canvas');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
 
   const isTaken = useMemo(() => {
     const set = new Set(state?.placements.map(p => `${p.x},${p.y}`) || []);
@@ -70,7 +110,7 @@ const TheCanva: React.FC = () => {
       }
 
       // 1) Get mint params from backend
-      const paramsRes = await fetch(`${apiBase}/api/canva/mint-params`, {
+      const paramsRes = await fetch(`${config.apiBase}/api/canva/mint-params`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -93,7 +133,7 @@ const TheCanva: React.FC = () => {
       const hash = typeof txHash === 'string' ? txHash : (txHash as any)?.hash || null;
 
       // 3) Place on canva
-      const res = await fetch(`${apiBase}/api/canva/place`, {
+      const res = await fetch(`${config.apiBase}/api/canva/place`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

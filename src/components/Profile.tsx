@@ -3,6 +3,7 @@ import { LogOut, User, Wallet, CheckCircle2, Link as LinkIcon, AlertTriangle, Pl
 import { useAccount, useChainId, useSwitchChain, useDisconnect } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { SiweMessage } from 'siwe';
+import { config } from '../config/environment';
 
 interface UserProfile {
   discordId: string;

@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ExternalLink, Plus, Trash2 } from 'lucide-react';
+import { Label } from './ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { ExternalLink, Plus, Trash2, Twitter, Upload, Download, Heart, MessageCircle, Share2, RefreshCw } from 'lucide-react';
+import { config } from '../config/environment';
 
 // TypeScript declarations for Twitter widget API
 declare global {
@@ -35,6 +39,8 @@ const XFeed: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [postUrl, setPostUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [description, setDescription] = useState('');
 
   // Load X embed script when component mounts
   useEffect(() => {
@@ -145,19 +151,72 @@ const XFeed: React.FC = () => {
 
   // Load persisted posts once
   useEffect(() => {
-    (async () => {
+    const fetchPosts = async () => {
       try {
-        const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-        const res = await fetch(`${apiBase}/api/xposts`, { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setPosts(data || []);
-          setTimeout(processXEmbeds, 100);
+        const response = await fetch(`${config.apiBase}/api/x-feed`);
+        if (response.ok) {
+          const data = await response.json();
+          setPosts(data.posts || []);
         }
-      } catch {}
-    })();
-    // run once on mount
+      } catch (error) {
+        console.error('Error fetching posts:', error);
+      }
+    };
+
+    fetchPosts();
   }, []);
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('post', file);
+    if (description) formData.append('description', description);
+
+    try {
+      const response = await fetch(`${config.apiBase}/api/x-feed/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPosts(prev => [data.post, ...prev]);
+        setDescription('');
+        setMessage('Post uploaded successfully!');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Failed to upload post');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error uploading post:', error);
+      setMessage('Error uploading post');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+    try {
+      const response = await fetch(`${config.apiBase}/api/x-feed/${postId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        setMessage('Post deleted successfully!');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Failed to delete post');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      setMessage('Error deleting post');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col bg-[hsl(var(--background))]">

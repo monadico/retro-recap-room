@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Upload, Trash2, Plus } from 'lucide-react';
+import { config } from '../config/environment';
 
 interface UserProfile {
   discordId: string;
@@ -28,21 +29,21 @@ const PoolTV: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [canUpload, setCanUpload] = useState(false);
+  const [message, setMessage] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-    const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-    const u = await fetch(`${apiBase}/auth/user`, { credentials: 'include' });
+    const u = await fetch(`${config.apiBase}/auth/user`, { credentials: 'include' });
         if (u.ok) {
           const data = await u.json();
           setUser({ discordId: data.discordId, username: data.username });
         } else {
           setUser(null);
         }
-    const p = await fetch(`${apiBase}/api/upload-permissions`, { credentials: 'include' });
+    const p = await fetch(`${config.apiBase}/api/upload-permissions`, { credentials: 'include' });
         if (p.ok) {
           const pdata = await p.json();
           setCanUpload(!!pdata.canUpload);
@@ -57,17 +58,23 @@ const PoolTV: React.FC = () => {
     load();
   }, []);
 
-  const fetchVideos = async () => {
-  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-  const res = await fetch(`${apiBase}/api/videos`);
-    if (res.ok) {
-      const list: VideoItem[] = await res.json();
-      setVideos(list);
-      if (list.length && currentIndex >= list.length) setCurrentIndex(0);
-    }
-  };
-
+  // Fetch videos on component mount
   useEffect(() => {
+    const fetchVideos = async () => {
+      try {
+        const response = await fetch(`${config.apiBase}/api/videos`);
+        if (response.ok) {
+          const data = await response.json();
+          setVideos(data.videos || []);
+          if (data.videos && data.videos.length > 0) {
+            setCurrentIndex(0);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching videos:', error);
+      }
+    };
+
     fetchVideos();
   }, []);
 
@@ -124,7 +131,7 @@ const PoolTV: React.FC = () => {
     if (title) form.append('title', title);
     if (description) form.append('description', description);
   const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-  const res = await fetch(`${apiBase}/api/videos`, {
+  const res = await fetch(`${config.apiBase}/api/videos`, {
       method: 'POST',
       credentials: 'include',
       body: form,
@@ -141,13 +148,57 @@ const PoolTV: React.FC = () => {
     }
   };
 
-  const deleteVideo = async (id: string) => {
-  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-  const res = await fetch(`${apiBase}/api/videos/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (res.ok) await fetchVideos();
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('video', file);
+
+    try {
+      const response = await fetch(`${config.apiBase}/api/upload-video`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setVideos(prev => [...prev, data.video]);
+        setMessage('Video uploaded successfully!');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Failed to upload video');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      setMessage('Error uploading video');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const handleDelete = async (videoId: string) => {
+    try {
+      const response = await fetch(`${config.apiBase}/api/videos/${videoId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setVideos(prev => prev.filter(v => v.id !== videoId));
+        if (currentIndex >= videos.length - 1) {
+          setCurrentIndex(Math.max(0, videos.length - 2));
+        }
+        setMessage('Video deleted successfully!');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Failed to delete video');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      setMessage('Error deleting video');
+      setTimeout(() => setMessage(''), 3000);
+    }
   };
 
   return (
@@ -180,7 +231,7 @@ const PoolTV: React.FC = () => {
                 <div className="text-white text-sm font-semibold">{v.title}</div>
                 <div className="text-gray-400 text-xs">Uploaded {new Date(v.uploadedAt).toLocaleString()}</div>
                 {user && v.uploadedBy === user.discordId && (
-                  <button className="mt-1 text-xs text-red-400 hover:text-red-300" onClick={(e) => { e.stopPropagation(); deleteVideo(v.id); }}>
+                  <button className="mt-1 text-xs text-red-400 hover:text-red-300" onClick={(e) => { e.stopPropagation(); handleDelete(v.id); }}>
                     <Trash2 className="inline mr-1" size={14} /> Delete
                   </button>
                 )}
@@ -199,7 +250,7 @@ const PoolTV: React.FC = () => {
               className="w-full h-full object-contain"
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
-              src={`${(import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001'}${currentVideo.url}`}
+              src={`${config.apiBase}${currentVideo.url}`}
               controls={false}
             />
           ) : (

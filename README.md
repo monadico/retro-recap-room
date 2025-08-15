@@ -4,6 +4,37 @@
 
 **URL**: https://lovable.dev/projects/304b660c-8482-4fd6-bbdd-c052211c6dac
 
+## Environment Configuration
+
+This application supports both local development and production deployment through environment variables.
+
+### Local Development (Default)
+When running locally, the app automatically connects to:
+- **Backend API**: `http://localhost:3001`
+- **WebSocket**: `ws://localhost:3001`
+
+### Production Deployment
+For production deployment, set the following environment variable:
+
+```bash
+VITE_API_BASE=https://your-backend-domain.com
+```
+
+This will automatically configure:
+- **Backend API**: `https://your-backend-domain.com`
+- **WebSocket**: `wss://your-backend-domain.com`
+
+### Setting Environment Variables
+
+#### Option 1: Environment File (Local Development)
+Create a `.env.local` file in the project root:
+```bash
+VITE_API_BASE=http://localhost:3001
+```
+
+#### Option 2: Deployment Platform
+Set `VITE_API_BASE` in your deployment platform's environment variables section.
+
 ## How can I edit this code?
 
 There are several ways of editing your application.

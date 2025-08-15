@@ -10,6 +10,9 @@ import {
   User
 } from 'lucide-react';
 import Profile from './Profile';
+import { Button } from './ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { config } from '../config/environment';
 
 interface DockItem {
   id: string;
@@ -70,8 +73,7 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       console.log('Checking authentication status...');
       console.log('Current cookies:', document.cookie);
       
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      const response = await fetch(`${apiBase}/auth/user`, {
+      const response = await fetch(`${config.apiBase}/auth/user`, {
         credentials: 'include'
       });
       
@@ -100,16 +102,36 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
     }
   }, [showProfile]);
 
+  const handleLogin = async () => {
+    try {
+      const response = await fetch(`${config.apiBase}/auth/discord`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        window.location.href = data.authUrl;
+      } else {
+        console.error('Failed to get auth URL');
+      }
+    } catch (error) {
+      console.error('Error during login:', error);
+    }
+  };
+
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:3001/auth/logout', {
+      const response = await fetch(`${config.apiBase}/auth/logout`, {
         method: 'POST',
         credentials: 'include'
       });
-      setUser(null);
-      setShowProfile(false);
+      
+      if (response.ok) {
+        setUser(null);
+        window.location.reload();
+      }
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('Error during logout:', error);
     }
   };
 
@@ -118,8 +140,7 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
       setShowProfile(true);
     } else {
       // Redirect to Discord OAuth
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      window.location.href = `${apiBase}/auth/discord`;
+      handleLogin();
     }
   };
 

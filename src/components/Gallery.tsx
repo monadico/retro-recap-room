@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Heart, MessageCircle, Send, Upload, Plus, Lock, AlertTriangle } from 'lucide-react';
+import { Label } from './ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Camera, Upload, Download, Trash2, Heart, MessageCircle, Share2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { config } from '../config/environment';
 
 interface Comment {
   id: string;
@@ -24,8 +28,8 @@ interface Photo {
 }
 
 // API base URL - change this to your VPS URL when deploying
-const API_BASE_URL = `${(import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001'}/api`;
-const BACKEND_BASE_URL = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+const API_BASE_URL = `${config.apiBase}/api`;
+const BACKEND_BASE_URL = config.apiBase;
 
 // API functions
 const fetchPhotos = async (): Promise<Photo[]> => {
