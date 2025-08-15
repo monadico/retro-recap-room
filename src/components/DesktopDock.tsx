@@ -105,7 +105,11 @@ const DesktopDock: React.FC<DesktopDockProps> = ({ onOpenWindow }) => {
   const handleLogin = async () => {
     // For Discord OAuth, directly redirect the browser window
     // This avoids CORS issues with Discord's OAuth endpoint
-    window.location.href = `${config.apiBase}/auth/discord`;
+    const discordUrl = `${config.apiBase}/auth/discord`;
+    console.log('[DesktopDock] Discord OAuth URL:', discordUrl);
+    console.log('[DesktopDock] config.apiBase:', config.apiBase);
+    console.log('[DesktopDock] VITE_API_BASE env:', (import.meta as any).env?.VITE_API_BASE);
+    window.location.href = discordUrl;
   };
 
   const handleLogout = async () => {
