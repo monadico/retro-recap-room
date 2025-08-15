@@ -1,7 +1,10 @@
 // Environment configuration for local development vs production
+console.log('[ENV DEBUG] VITE_API_BASE:', (import.meta as any).env?.VITE_API_BASE);
+console.log('[ENV DEBUG] All env vars:', (import.meta as any).env);
+
 export const config = {
   // API base URL - defaults to localhost for development
-  apiBase: (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001',
+  apiBase: 'https://themoncapsule.fun', // Temporarily hardcoded for testing
   
   // WebSocket configuration
   ws: {
