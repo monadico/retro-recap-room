@@ -1,4 +1,4 @@
-require("dotenv").config({ override: true });
+require("dotenv").config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -72,16 +72,27 @@ const DiscordStrategy = require('passport-discord').Strategy;
 
 // Environment-aware Discord redirect URI
 const getDiscordRedirectURI = () => {
+  console.log('[server] getDiscordRedirectURI() called');
+  console.log('[server] process.env.DISCORD_REDIRECT_URI =', process.env.DISCORD_REDIRECT_URI);
+  console.log('[server] process.env.FRONTEND_ORIGIN =', process.env.FRONTEND_ORIGIN);
+  console.log('[server] process.env.NODE_ENV =', process.env.NODE_ENV);
+  
   // If DISCORD_REDIRECT_URI is explicitly set, use it
   if (process.env.DISCORD_REDIRECT_URI) {
+    console.log('[server] Using explicit DISCORD_REDIRECT_URI:', process.env.DISCORD_REDIRECT_URI);
     return process.env.DISCORD_REDIRECT_URI;
   }
   
   // Otherwise, construct based on environment
   const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_ORIGIN?.includes('https://');
   const baseUrl = isProduction ? 'https://themoncapsule.fun' : 'http://localhost:3001';
+  const constructedUri = `${baseUrl}/auth/discord/callback`;
   
-  return `${baseUrl}/auth/discord/callback`;
+  console.log('[server] Constructed URI:', constructedUri);
+  console.log('[server] isProduction:', isProduction);
+  console.log('[server] baseUrl:', baseUrl);
+  
+  return constructedUri;
 };
 
 console.log('[server] Discord redirect URI:', getDiscordRedirectURI());
