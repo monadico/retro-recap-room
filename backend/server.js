@@ -70,12 +70,28 @@ app.use(session({
 // Passport Discord strategy
 const DiscordStrategy = require('passport-discord').Strategy;
 
+// Environment-aware Discord redirect URI
+const getDiscordRedirectURI = () => {
+  // If DISCORD_REDIRECT_URI is explicitly set, use it
+  if (process.env.DISCORD_REDIRECT_URI) {
+    return process.env.DISCORD_REDIRECT_URI;
+  }
+  
+  // Otherwise, construct based on environment
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.FRONTEND_ORIGIN?.includes('https://');
+  const baseUrl = isProduction ? 'https://themoncapsule.fun' : 'http://localhost:3001';
+  
+  return `${baseUrl}/auth/discord/callback`;
+};
+
+console.log('[server] Discord redirect URI:', getDiscordRedirectURI());
+
 passport.use(
   new DiscordStrategy(
     {
       clientID: process.env.DISCORD_CLIENT_ID || 'your_discord_client_id',
       clientSecret: process.env.DISCORD_CLIENT_SECRET || 'your_discord_client_secret',
-      callbackURL: process.env.DISCORD_REDIRECT_URI,
+      callbackURL: getDiscordRedirectURI(),
       scope: ['identify', 'email'],
     },
     async (accessToken, refreshToken, profile, done) => {
