@@ -8,8 +8,15 @@ module.exports = function(passport) {
   const router = express.Router();
 
 // Environment configuration helper (evaluated at call time to avoid stale values)
-const getFrontendOrigin = () => process.env.FRONTEND_ORIGIN || 'http://localhost:8080';
+const getFrontendOrigin = () => {
+  const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:8080';
+  console.log('[auth] getFrontendOrigin() called, returning:', origin);
+  console.log('[auth] process.env.FRONTEND_ORIGIN =', process.env.FRONTEND_ORIGIN);
+  console.log('[auth] All process.env keys:', Object.keys(process.env).filter(key => key.includes('FRONTEND')));
+  return origin;
+};
 console.log('[auth] FRONTEND_ORIGIN (initial) =', getFrontendOrigin());
+console.log('[auth] Direct process.env.FRONTEND_ORIGIN =', process.env.FRONTEND_ORIGIN);
 const allowedOrigins = [getFrontendOrigin(), 'http://localhost:8080', 'http://127.0.0.1:8080'];
 
 // Per-route CORS with credentials for auth endpoints
