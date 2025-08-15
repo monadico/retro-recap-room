@@ -130,7 +130,7 @@ const PoolTV: React.FC = () => {
     form.append('video', file);
     if (title) form.append('title', title);
     if (description) form.append('description', description);
-  const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
+  const apiBase = config.apiBase;
   const res = await fetch(`${config.apiBase}/api/videos`, {
       method: 'POST',
       credentials: 'include',

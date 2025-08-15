@@ -44,8 +44,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onClose }) => {
     let isMounted = true;
     const fetchLinkStatus = async () => {
       try {
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      const res = await fetch(`${apiBase}/auth/siwe/status`, { credentials: 'include' });
+      const res = await fetch(`${config.apiBase}/auth/siwe/status`, { credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json();
         if (isMounted) setLinkedAddress(data.walletAddress || null);
@@ -98,8 +97,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onClose }) => {
       }
 
       // 1) Get nonce from backend
-    const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-    const nonceRes = await fetch(`${apiBase}/auth/siwe/nonce`, { credentials: 'include' });
+    const nonceRes = await fetch(`${config.apiBase}/auth/siwe/nonce`, { credentials: 'include' });
       if (!nonceRes.ok) throw new Error('Failed to get nonce');
       const { nonce } = await nonceRes.json();
 
@@ -126,7 +124,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onClose }) => {
       });
 
       // 4) Verify on backend
-    const verifyRes = await fetch(`${apiBase}/auth/siwe/verify`, {
+    const verifyRes = await fetch(`${config.apiBase}/auth/siwe/verify`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

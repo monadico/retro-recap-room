@@ -64,8 +64,7 @@ const XFeed: React.FC = () => {
   const fetchXEmbed = async (url: string) => {
     try {
       // Use our backend as a proxy to avoid CORS issues
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      const response = await fetch(`${apiBase}/api/xposts/oembed`, {
+      const response = await fetch(`${config.apiBase}/api/xposts/oembed`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,8 +104,7 @@ const XFeed: React.FC = () => {
       const embedData = await fetchXEmbed(postUrl);
 
       // Persist to backend
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3001';
-      const submitRes = await fetch(`${apiBase}/api/xposts/save`, {
+      const submitRes = await fetch(`${config.apiBase}/api/xposts/save`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
